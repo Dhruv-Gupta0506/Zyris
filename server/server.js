@@ -16,6 +16,13 @@ app.use("/api/auth", require("./routes/authRoutes"));
 // RESUME ROUTES
 app.use("/api/resume", require("./routes/resumeRoutes"));
 
+// JD ROUTES
+app.use("/api/jd", require("./routes/jdRoutes"));
+
+// MOCK INTERVIEW ROUTE
+app.use("/api/interview", require("./routes/interviewRoutes"));
+
+
 app.get("/", (req, res) => {
   res.json({ message: "CareerNexus API Running" });
 });

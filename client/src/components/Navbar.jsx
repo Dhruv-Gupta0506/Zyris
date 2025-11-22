@@ -16,8 +16,10 @@ export default function Navbar() {
         marginBottom: "20px",
       }}
     >
+      {/* Always visible */}
       <Link to="/" style={{ marginRight: "20px" }}>Home</Link>
 
+      {/* When NOT logged in */}
       {!token && (
         <>
           <Link to="/login" style={{ marginRight: "20px" }}>Login</Link>
@@ -25,11 +27,28 @@ export default function Navbar() {
         </>
       )}
 
+      {/* When logged in */}
       {token && (
         <>
           <Link to="/dashboard" style={{ marginRight: "20px" }}>Dashboard</Link>
           <Link to="/resume" style={{ marginRight: "20px" }}>Resume Analyzer</Link>
-          <button onClick={handleLogout} style={{ cursor: "pointer" }}>
+          <Link to="/history" style={{ marginRight: "20px" }}>Resume History</Link>
+          <Link to="/jd" style={{ marginRight: "20px" }}>JD Analyzer</Link>
+          <Link to="/jd-history" style={{ marginRight: "20px" }}>JD History</Link>
+          <Link to="/interview" style={{ marginRight: "20px" }}>Mock Interview</Link>
+          <Link to="/interview-history" style={{ marginRight: "20px" }}>Interview History</Link>
+
+
+          <button
+            onClick={handleLogout}
+            style={{
+              cursor: "pointer",
+              background: "none",
+              border: "none",
+              color: "red",
+              fontWeight: "bold",
+            }}
+          >
             Logout
           </button>
         </>

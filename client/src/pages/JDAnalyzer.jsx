@@ -2,57 +2,47 @@ import { useState } from "react";
 import axios from "axios";
 import API_URL from "../api/api";
 
-export default function ResumeAnalyzer() {
-  const [file, setFile] = useState(null);
-  const [parsed, setParsed] = useState(null);
+export default function JDAnalyzer() {
+  const [jobTitle, setJobTitle] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
   const [loading, setLoading] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [parsed, setParsed] = useState(null);
 
-  const handleFileChange = (e) => {
-    const selected = e.target.files[0];
-
-    if (selected && selected.type !== "application/pdf") {
-      alert("Only PDF files are allowed!");
-      e.target.value = "";
-      return;
-    }
-
-    setFile(selected);
-  };
+  const sectionTitles = [
+    "Match Score",
+    "Top Strengths Based on JD",
+    "Missing / Important Skills",
+    "Recommended Keywords to Add",
+    "Tailored Resume Bullet Suggestions",
+    "Fit Verdict",
+    "Improvement Tips",
+  ];
 
   const parseAnalysis = (text) => {
     if (!text) return null;
 
-    const sections = [
-      "ATS Score",
-      "Key Skills Extracted",
-      "Strengths",
-      "Weaknesses",
-      "Missing Keywords",
-      "Suggested Job Roles",
-      "Recruiter Impression",
-      "Resume Improvement Checklist",
-    ];
-
     const parsedSections = [];
     let remaining = text;
 
-    sections.forEach((title, index) => {
+    sectionTitles.forEach((title, index) => {
       const start = remaining.indexOf(title);
       if (start === -1) return;
 
       const end =
-        index + 1 < sections.length
-          ? remaining.indexOf(sections[index + 1])
+        index + 1 < sectionTitles.length
+          ? remaining.indexOf(sectionTitles[index + 1])
           : remaining.length;
 
       let content = remaining.slice(start + title.length, end).trim();
 
-      // ✅ CLEAN & NORMALIZE CONTENT
+      // ✅ CLEAN FORMATTING SAME AS RESUME PAGES
       content = content
-        .replace(/^\d+[\).\:\-]?\s*/gm, "")     // remove numbering
+        .replace(/^\d+[\).\:\-]?\s*/gm, "")     // numbering
         .replace(/^\:\s*/gm, "")                // remove leading colon
+        .replace(/^\*\*\s*/gm, "")              // remove "**"
         .replace(/^\(\d.*?\)\:?\s*/gm, "")      // remove (0-100):
-        .replace(/^\s*\*\s*/gm, "• ")           // ✅ normalize bullets and alignment
+        .replace(/^\s*\*\s*/gm, "• ")           // normalize bullets
         .trim();
 
       parsedSections.push({
@@ -78,32 +68,39 @@ export default function ResumeAnalyzer() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!file) {
-      alert("Please select a PDF file first.");
+    if (!jobDescription || jobDescription.trim().length < 20) {
+      alert("Please paste a proper job description (at least a few lines).");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("You are not logged in.");
       return;
     }
 
     try {
       setLoading(true);
+      setAnalysis(null);
       setParsed(null);
 
-      const token = localStorage.getItem("token");
+      const res = await axios.post(
+        `${API_URL}/jd/analyze`,
+        { jobTitle, jobDescription },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      const formData = new FormData();
-      formData.append("resume", file);
-
-      const res = await axios.post(`${API_URL}/resume/analyze`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      setAnalysis(res.data.analysis);
 
       const parsedResult = parseAnalysis(res.data.analysis);
       setParsed(parsedResult);
     } catch (err) {
       console.error(err);
-      alert("Failed to analyze resume.");
+      alert(err.response?.data?.message || "Job analysis failed.");
     } finally {
       setLoading(false);
     }
@@ -111,28 +108,39 @@ export default function ResumeAnalyzer() {
 
   return (
     <div style={{ padding: "20px" }}>
-      <h2>Resume Analyzer</h2>
+      <h2>Job Description Analyzer</h2>
 
       <form onSubmit={handleSubmit} style={{ marginTop: "20px" }}>
-        <div style={{ marginBottom: "15px" }}>
-          <label style={{ display: "block", marginBottom: "8px", fontWeight: "bold" }}>
-            Select Resume (PDF only):
-          </label>
 
+        {/* JOB TITLE */}
+        <div style={{ marginBottom: "15px" }}>
+          <label style={{ display: "block", marginBottom: "5px" }}>
+            Job Title (optional):
+          </label>
           <input
-            type="file"
-            accept="application/pdf"
-            onChange={handleFileChange}
-            style={{ padding: "5px" }}
+            type="text"
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            placeholder="e.g. Junior Full Stack Developer"
+            style={{ padding: "8px", width: "100%", maxWidth: "400px" }}
           />
         </div>
 
-        {file && (
-          <p style={{ marginBottom: "20px", color: "green" }}>
-            Selected File: <b>{file.name}</b>
-          </p>
-        )}
+        {/* JOB DESCRIPTION */}
+        <div style={{ marginBottom: "15px" }}>
+          <label style={{ display: "block", marginBottom: "5px" }}>
+            Job Description:
+          </label>
+          <textarea
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            placeholder="Paste the full job description here..."
+            rows={8}
+            style={{ padding: "8px", width: "100%", maxWidth: "600px" }}
+          />
+        </div>
 
+        {/* SUBMIT BUTTON */}
         <button
           type="submit"
           disabled={loading}
@@ -144,13 +152,14 @@ export default function ResumeAnalyzer() {
             cursor: "pointer",
           }}
         >
-          {loading ? "Analyzing..." : "Analyze Resume"}
+          {loading ? "Analyzing..." : "Analyze Job Match"}
         </button>
       </form>
 
+      {/* RESULTS */}
       {parsed && (
-        <div style={{ marginTop: "30px" }}>
-          <h3>Resume Analysis</h3>
+        <div style={{ marginTop: "30px", whiteSpace: "pre-wrap" }}>
+          <h3>Job Match Analysis</h3>
 
           {parsed.map((section, index) => (
             <div key={index} style={{ marginBottom: "12px" }}>

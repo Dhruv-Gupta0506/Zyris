@@ -6,7 +6,8 @@ const ResumeAnalysisSchema = new mongoose.Schema({
     ref: "User",
     required: true
   },
-  analysisText: { type: String }, 
+  fileName: { type: String, required: true },
+  analysisText: { type: String, required: true },
   createdAt: { type: Date, default: Date.now }
 });
 
