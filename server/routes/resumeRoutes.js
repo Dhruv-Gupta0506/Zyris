@@ -15,7 +15,13 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // ROUTES
-router.post("/analyze", authMiddleware, upload.single("resume"), analyzeResume);
+router.post(
+  "/analyze",
+  authMiddleware,
+  upload.single("resume"),
+  analyzeResume
+);
+
 router.get("/history", authMiddleware, history);
 
 module.exports = router;

@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
+const matchRoutes = require("./routes/matchRoutes");
+const tailorController = require("./routes/tailorRoutes");
+const coverLetterRoutes = require("./routes/coverLetterRoutes");
 
 dotenv.config();
 connectDB();
@@ -21,6 +24,15 @@ app.use("/api/jd", require("./routes/jdRoutes"));
 
 // MOCK INTERVIEW ROUTE
 app.use("/api/interview", require("./routes/interviewRoutes"));
+
+// MATCH ROUTES
+app.use("/api/match", matchRoutes);
+
+// TAILOR ROUTES
+app.use("/api/tailor", tailorController);
+
+// COVER LETTER ROUTES
+app.use("/api/cover-letter", coverLetterRoutes);
 
 
 app.get("/", (req, res) => {

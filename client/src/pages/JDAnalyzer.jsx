@@ -7,63 +7,6 @@ export default function JDAnalyzer() {
   const [jobDescription, setJobDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
-  const [parsed, setParsed] = useState(null);
-
-  const sectionTitles = [
-    "Match Score",
-    "Top Strengths Based on JD",
-    "Missing / Important Skills",
-    "Recommended Keywords to Add",
-    "Tailored Resume Bullet Suggestions",
-    "Fit Verdict",
-    "Improvement Tips",
-  ];
-
-  const parseAnalysis = (text) => {
-    if (!text) return null;
-
-    const parsedSections = [];
-    let remaining = text;
-
-    sectionTitles.forEach((title, index) => {
-      const start = remaining.indexOf(title);
-      if (start === -1) return;
-
-      const end =
-        index + 1 < sectionTitles.length
-          ? remaining.indexOf(sectionTitles[index + 1])
-          : remaining.length;
-
-      let content = remaining.slice(start + title.length, end).trim();
-
-      // ✅ CLEAN FORMATTING SAME AS RESUME PAGES
-      content = content
-        .replace(/^\d+[\).\:\-]?\s*/gm, "")     // numbering
-        .replace(/^\:\s*/gm, "")                // remove leading colon
-        .replace(/^\*\*\s*/gm, "")              // remove "**"
-        .replace(/^\(\d.*?\)\:?\s*/gm, "")      // remove (0-100):
-        .replace(/^\s*\*\s*/gm, "• ")           // normalize bullets
-        .trim();
-
-      parsedSections.push({
-        title,
-        content,
-        open: index === 0,
-      });
-
-      remaining = remaining.slice(end);
-    });
-
-    return parsedSections;
-  };
-
-  const toggleSection = (index) => {
-    setParsed((prev) =>
-      prev.map((sec, i) =>
-        i === index ? { ...sec, open: !sec.open } : sec
-      )
-    );
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -82,7 +25,6 @@ export default function JDAnalyzer() {
     try {
       setLoading(true);
       setAnalysis(null);
-      setParsed(null);
 
       const res = await axios.post(
         `${API_URL}/jd/analyze`,
@@ -95,9 +37,6 @@ export default function JDAnalyzer() {
       );
 
       setAnalysis(res.data.analysis);
-
-      const parsedResult = parseAnalysis(res.data.analysis);
-      setParsed(parsedResult);
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.message || "Job analysis failed.");
@@ -112,7 +51,6 @@ export default function JDAnalyzer() {
 
       <form onSubmit={handleSubmit} style={{ marginTop: "20px" }}>
 
-        {/* JOB TITLE */}
         <div style={{ marginBottom: "15px" }}>
           <label style={{ display: "block", marginBottom: "5px" }}>
             Job Title (optional):
@@ -126,7 +64,6 @@ export default function JDAnalyzer() {
           />
         </div>
 
-        {/* JOB DESCRIPTION */}
         <div style={{ marginBottom: "15px" }}>
           <label style={{ display: "block", marginBottom: "5px" }}>
             Job Description:
@@ -140,7 +77,6 @@ export default function JDAnalyzer() {
           />
         </div>
 
-        {/* SUBMIT BUTTON */}
         <button
           type="submit"
           disabled={loading}
@@ -156,39 +92,28 @@ export default function JDAnalyzer() {
         </button>
       </form>
 
-      {/* RESULTS */}
-      {parsed && (
-        <div style={{ marginTop: "30px", whiteSpace: "pre-wrap" }}>
+      {analysis && (
+        <div style={{ marginTop: "30px" }}>
           <h3>Job Match Analysis</h3>
 
-          {parsed.map((section, index) => (
-            <div key={index} style={{ marginBottom: "12px" }}>
-              <div
-                onClick={() => toggleSection(index)}
-                style={{
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                  padding: "6px",
-                  background: "#eee",
-                }}
-              >
-                {section.title} {section.open ? "▲" : "▼"}
-              </div>
+          <p><b>Job Title:</b> {analysis.jobTitle ?? "Not specified"}</p>
+          <p><b>Match Score:</b> {analysis.matchScore ?? "N/A"}</p>
+          <p><b>Fit Verdict:</b> {analysis.fitVerdict ?? "N/A"}</p>
 
-              {section.open && (
-                <div
-                  style={{
-                    padding: "12px 16px",
-                    border: "1px solid #ddd",
-                    borderTop: "none",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {section.content}
-                </div>
-              )}
-            </div>
-          ))}
+          <h4>Top Strengths Based on JD</h4>
+          <ul>{analysis.strengthsBasedOnJD?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Missing Skills</h4>
+          <ul>{analysis.missingSkills?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Recommended Keywords to Add</h4>
+          <ul>{analysis.recommendedKeywords?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Tailored Resume Bullet Suggestions</h4>
+          <ul>{analysis.tailoredBulletSuggestions?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Improvement Tips</h4>
+          <ul>{analysis.improvementTips?.map((s, i) => <li key={i}>{s}</li>)}</ul>
         </div>
       )}
     </div>

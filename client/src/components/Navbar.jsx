@@ -35,6 +35,9 @@ export default function Navbar() {
           <Link to="/history" style={{ marginRight: "20px" }}>Resume History</Link>
           <Link to="/jd" style={{ marginRight: "20px" }}>JD Analyzer</Link>
           <Link to="/jd-history" style={{ marginRight: "20px" }}>JD History</Link>
+          <Link to="/match-engine" style={{ marginRight: "20px" }}>Match Engine</Link>
+          <Link to="/tailored-resume" style={{ marginRight: "20px" }}>Tailored Resume</Link>
+          <Link to="/cover-letter" style={{ marginRight: "20px" }}>Cover Letter Generator</Link>
           <Link to="/interview" style={{ marginRight: "20px" }}>Mock Interview</Link>
           <Link to="/interview-history" style={{ marginRight: "20px" }}>Interview History</Link>
 

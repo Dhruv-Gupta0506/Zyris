@@ -5,68 +5,13 @@ import API_URL from "../api/api";
 export default function ResumeHistory() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState({});
 
-  const parseAnalysis = (text) => {
-    if (!text) return null;
-
-    const sections = [
-      "ATS Score",
-      "Key Skills Extracted",
-      "Strengths",
-      "Weaknesses",
-      "Missing Keywords",
-      "Suggested Job Roles",
-      "Recruiter Impression",
-      "Resume Improvement Checklist",
-    ];
-
-    const parsedSections = [];
-    let remaining = text;
-
-    sections.forEach((title, index) => {
-      const start = remaining.indexOf(title);
-      if (start === -1) return;
-
-      const end =
-        index + 1 < sections.length
-          ? remaining.indexOf(sections[index + 1])
-          : remaining.length;
-
-      let content = remaining.slice(start + title.length, end).trim();
-
-      // ✅ APPLY SAME CLEANUP AS ResumeAnalyzer
-      content = content
-        .replace(/^\d+[\).\:\-]?\s*/gm, "")     // numbering
-        .replace(/^\:\s*/gm, "")                // leading colon
-        .replace(/^\(\d.*?\)\:?\s*/gm, "")      // (0-100):
-        .replace(/^\s*\*\s*/gm, "• ")           // normalize bullets
-        .trim();
-
-      parsedSections.push({
-        title,
-        content,
-        open: false,
-      });
-
-      remaining = remaining.slice(end);
-    });
-
-    return parsedSections;
-  };
-
-  const toggleSection = (recordIndex, sectionIndex) => {
-    setHistory((prev) =>
-      prev.map((record, rIdx) =>
-        rIdx === recordIndex
-          ? {
-              ...record,
-              parsed: record.parsed.map((sec, sIdx) =>
-                sIdx === sectionIndex ? { ...sec, open: !sec.open } : sec
-              ),
-            }
-          : record
-      )
-    );
+  const toggleExpand = (id) => {
+    setExpanded((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
   };
 
   useEffect(() => {
@@ -79,13 +24,9 @@ export default function ResumeHistory() {
             Authorization: `Bearer ${token}`,
           },
         });
+        console.log("HISTORY SAMPLE:",res.data.history[0]);
 
-        const formatted = res.data.history.map((item) => ({
-          ...item,
-          parsed: parseAnalysis(item.analysisText),
-        }));
-
-        setHistory(formatted);
+        setHistory(res.data.history);
       } catch (err) {
         console.error(err);
         alert("Failed to load resume history.");
@@ -105,7 +46,7 @@ export default function ResumeHistory() {
 
       {!loading && history.length === 0 && <p>No history found.</p>}
 
-      {history.map((record, index) => (
+      {history.map((record) => (
         <div
           key={record._id}
           style={{
@@ -118,36 +59,69 @@ export default function ResumeHistory() {
           <br />
           <small>{new Date(record.createdAt).toLocaleString()}</small>
 
-          {record.parsed && (
-            <div style={{ marginTop: "12px" }}>
-              {record.parsed.map((section, sIdx) => (
-                <div key={sIdx} style={{ marginBottom: "10px" }}>
-                  <div
-                    onClick={() => toggleSection(index, sIdx)}
-                    style={{
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                      padding: "6px",
-                      background: "#eee",
-                    }}
-                  >
-                    {section.title} {section.open ? "▲" : "▼"}
-                  </div>
+          <p><b>Target Role:</b> {record.targetRole ?? "Not specified"}</p>
+          <p><b>ATS Score:</b> {record.atsScore ?? "N/A"}</p>
 
-                  {section.open && (
-                    <div
-                      style={{
-                        padding: "12px 16px",
-                        border: "1px solid #ddd",
-                        borderTop: "none",
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {section.content}
-                    </div>
-                  )}
-                </div>
-              ))}
+          <button
+            onClick={() => toggleExpand(record._id)}
+            style={{
+              marginTop: "10px",
+              padding: "6px 12px",
+              cursor: "pointer",
+              background: expanded[record._id] ? "#444" : "#000",
+              color: "white",
+              border: "none",
+            }}
+          >
+            {expanded[record._id] ? "Hide Details ▲" : "Show Details ▼"}
+          </button>
+
+          {expanded[record._id] && (
+            <div style={{ marginTop: "15px" }}>
+              
+              {record.scoringBreakdown && (
+                <>
+                  <h4>Scoring Breakdown</h4>
+                  <ul>
+                    <li>Keyword Match: {record.scoringBreakdown.keywordMatch}</li>
+                    <li>Action Verbs: {record.scoringBreakdown.actionVerbs}</li>
+                    <li>Quantified Results: {record.scoringBreakdown.quantifiedResults}</li>
+                    <li>Formatting Clarity: {record.scoringBreakdown.formattingClarity}</li>
+                    <li>Relevance Alignment: {record.scoringBreakdown.relevanceAlignment}</li>
+                  </ul>
+                </>
+              )}
+
+              <h4>Skills</h4>
+              <ul>{record.skills?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Strengths</h4>
+              <ul>{record.strengths?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Weaknesses</h4>
+              <ul>{record.weaknesses?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Missing Keywords</h4>
+              <ul>{record.missingKeywords?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Suggested Roles</h4>
+              <ul>{record.suggestedRoles?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Recruiter Impression</h4>
+              <p>{record.recruiterImpression}</p>
+
+              <h4>Improvement Checklist</h4>
+              <ul>{record.improvementChecklist?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Summary Rewrite</h4>
+              <p>{record.summaryRewrite}</p>
+
+              <h4>Project Rewrites</h4>
+              <ul>{record.projectRewrites?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Bullet Rewrites</h4>
+              <ul>{record.bulletRewrites?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
             </div>
           )}
         </div>

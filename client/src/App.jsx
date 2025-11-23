@@ -12,6 +12,9 @@ import JDAnalyzer from "./pages/JDAnalyzer";
 import JDHistory from "./pages/JDHistory";
 import InterviewHistory from "./pages/InterviewHistory";
 import MockInterview from "./pages/MockInterview";
+import MatchEngine from "./pages/MatchEngine";
+import TailoredResume from "./pages/TailoredResume";
+import CoverLetter from "./pages/CoverLetter";
 
 function App() {
   return (
@@ -80,6 +83,30 @@ function App() {
           element={
             <ProtectedRoute>
               <InterviewHistory />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/match-engine"
+          element={
+            <ProtectedRoute>
+              <MatchEngine />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tailored-resume"
+          element={
+            <ProtectedRoute>
+              <TailoredResume />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cover-letter"
+          element={
+            <ProtectedRoute>
+              <CoverLetter />
             </ProtectedRoute>
           }
         />

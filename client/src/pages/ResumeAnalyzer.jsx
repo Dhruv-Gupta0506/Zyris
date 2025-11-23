@@ -4,7 +4,8 @@ import API_URL from "../api/api";
 
 export default function ResumeAnalyzer() {
   const [file, setFile] = useState(null);
-  const [parsed, setParsed] = useState(null);
+  const [targetRole, setTargetRole] = useState("");
+  const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleFileChange = (e) => {
@@ -19,62 +20,6 @@ export default function ResumeAnalyzer() {
     setFile(selected);
   };
 
-  const parseAnalysis = (text) => {
-    if (!text) return null;
-
-    const sections = [
-      "ATS Score",
-      "Key Skills Extracted",
-      "Strengths",
-      "Weaknesses",
-      "Missing Keywords",
-      "Suggested Job Roles",
-      "Recruiter Impression",
-      "Resume Improvement Checklist",
-    ];
-
-    const parsedSections = [];
-    let remaining = text;
-
-    sections.forEach((title, index) => {
-      const start = remaining.indexOf(title);
-      if (start === -1) return;
-
-      const end =
-        index + 1 < sections.length
-          ? remaining.indexOf(sections[index + 1])
-          : remaining.length;
-
-      let content = remaining.slice(start + title.length, end).trim();
-
-      // ✅ CLEAN & NORMALIZE CONTENT
-      content = content
-        .replace(/^\d+[\).\:\-]?\s*/gm, "")     // remove numbering
-        .replace(/^\:\s*/gm, "")                // remove leading colon
-        .replace(/^\(\d.*?\)\:?\s*/gm, "")      // remove (0-100):
-        .replace(/^\s*\*\s*/gm, "• ")           // ✅ normalize bullets and alignment
-        .trim();
-
-      parsedSections.push({
-        title,
-        content,
-        open: index === 0,
-      });
-
-      remaining = remaining.slice(end);
-    });
-
-    return parsedSections;
-  };
-
-  const toggleSection = (index) => {
-    setParsed((prev) =>
-      prev.map((sec, i) =>
-        i === index ? { ...sec, open: !sec.open } : sec
-      )
-    );
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -85,12 +30,13 @@ export default function ResumeAnalyzer() {
 
     try {
       setLoading(true);
-      setParsed(null);
+      setAnalysis(null);
 
       const token = localStorage.getItem("token");
 
       const formData = new FormData();
       formData.append("resume", file);
+      formData.append("targetRole", targetRole);
 
       const res = await axios.post(`${API_URL}/resume/analyze`, formData, {
         headers: {
@@ -99,8 +45,8 @@ export default function ResumeAnalyzer() {
         },
       });
 
-      const parsedResult = parseAnalysis(res.data.analysis);
-      setParsed(parsedResult);
+      setAnalysis(res.data.analysis);
+
     } catch (err) {
       console.error(err);
       alert("Failed to analyze resume.");
@@ -127,6 +73,20 @@ export default function ResumeAnalyzer() {
           />
         </div>
 
+        <div style={{ marginBottom: "15px" }}>
+          <label style={{ display: "block", marginBottom: "8px", fontWeight: "bold" }}>
+            Target Role (optional but improves results):
+          </label>
+
+          <input
+            type="text"
+            placeholder="e.g., Frontend Developer, MERN Developer, Java Backend, etc."
+            value={targetRole}
+            onChange={(e) => setTargetRole(e.target.value)}
+            style={{ padding: "6px", width: "60%" }}
+          />
+        </div>
+
         {file && (
           <p style={{ marginBottom: "20px", color: "green" }}>
             Selected File: <b>{file.name}</b>
@@ -148,38 +108,56 @@ export default function ResumeAnalyzer() {
         </button>
       </form>
 
-      {parsed && (
+      {analysis && (
         <div style={{ marginTop: "30px" }}>
           <h3>Resume Analysis</h3>
 
-          {parsed.map((section, index) => (
-            <div key={index} style={{ marginBottom: "12px" }}>
-              <div
-                onClick={() => toggleSection(index)}
-                style={{
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                  padding: "6px",
-                  background: "#eee",
-                }}
-              >
-                {section.title} {section.open ? "▲" : "▼"}
-              </div>
+          <p><b>Target Role:</b> {analysis.targetRole ?? "Not specified"}</p>
 
-              {section.open && (
-                <div
-                  style={{
-                    padding: "12px 16px",
-                    border: "1px solid #ddd",
-                    borderTop: "none",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {section.content}
-                </div>
-              )}
-            </div>
-          ))}
+          <p><b>ATS Score:</b> {analysis.atsScore ?? "N/A"}</p>
+
+          {analysis.scoringBreakdown && (
+            <>
+              <h4>Scoring Breakdown</h4>
+              <ul>
+                <li>Keyword Match: {analysis.scoringBreakdown.keywordMatch}</li>
+                <li>Action Verbs: {analysis.scoringBreakdown.actionVerbs}</li>
+                <li>Quantified Results: {analysis.scoringBreakdown.quantifiedResults}</li>
+                <li>Formatting Clarity: {analysis.scoringBreakdown.formattingClarity}</li>
+                <li>Relevance Alignment: {analysis.scoringBreakdown.relevanceAlignment}</li>
+              </ul>
+            </>
+          )}
+
+          <h4>Skills</h4>
+          <ul>{analysis.skills?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Strengths</h4>
+          <ul>{analysis.strengths?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Weaknesses</h4>
+          <ul>{analysis.weaknesses?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Missing Keywords</h4>
+          <ul>{analysis.missingKeywords?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Suggested Roles</h4>
+          <ul>{analysis.suggestedRoles?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Recruiter Impression</h4>
+          <p>{analysis.recruiterImpression}</p>
+
+          <h4>Improvement Checklist</h4>
+          <ul>{analysis.improvementChecklist?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Summary Rewrite</h4>
+          <p>{analysis.summaryRewrite}</p>
+
+          <h4>Project Rewrites</h4>
+          <ul>{analysis.projectRewrites?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Bullet Rewrites</h4>
+          <ul>{analysis.bulletRewrites?.map((s, i) => <li key={i}>{s}</li>)}</ul>
         </div>
       )}
     </div>

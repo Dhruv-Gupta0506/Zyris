@@ -5,69 +5,10 @@ import API_URL from "../api/api";
 export default function JDHistory() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState({});
 
-  const sectionTitles = [
-    "Match Score",
-    "Top Strengths Based on JD",
-    "Missing / Important Skills",
-    "Recommended Keywords to Add",
-    "Tailored Resume Bullet Suggestions",
-    "Fit Verdict",
-    "Improvement Tips",
-  ];
-
-  const parseAnalysis = (text) => {
-    if (!text) return null;
-
-    const parsedSections = [];
-    let remaining = text;
-
-    sectionTitles.forEach((title, index) => {
-      const start = remaining.indexOf(title);
-      if (start === -1) return;
-
-      const end =
-        index + 1 < sectionTitles.length
-          ? remaining.indexOf(sectionTitles[index + 1])
-          : remaining.length;
-
-      let content = remaining.slice(start + title.length, end).trim();
-
-      // ✅ SAME CLEANING RULES AS JDAnalyzer
-      content = content
-        .replace(/^\d+[\).\:\-]?\s*/gm, "")     // numbering
-        .replace(/^\:\s*/gm, "")                // remove leading colon
-        .replace(/^\*\*\s*/gm, "")              // remove "**"
-        .replace(/^\(\d.*?\)\:?\s*/gm, "")      // remove (0-100):
-        .replace(/^\s*\*\s*/gm, "• ")           // normalize bullets
-        .trim();
-
-      parsedSections.push({
-        title,
-        content,
-        open: false, // history stays collapsed
-      });
-
-      remaining = remaining.slice(end);
-    });
-
-    return parsedSections;
-  };
-
-  const toggleSection = (recordIndex, sectionIndex) => {
-    setHistory((prev) =>
-      prev.map((record, rIdx) =>
-        rIdx === recordIndex
-          ? {
-              ...record,
-              parsed: record.parsed.map((sec, sIdx) =>
-                sIdx === sectionIndex ? { ...sec, open: !sec.open } : sec
-              ),
-            }
-          : record
-      )
-    );
-  };
+  const toggleExpand = (id) =>
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -80,12 +21,7 @@ export default function JDHistory() {
           },
         });
 
-        const formatted = res.data.history.map((item) => ({
-          ...item,
-          parsed: parseAnalysis(item.analysisText),
-        }));
-
-        setHistory(formatted);
+        setHistory(res.data.history);
       } catch (err) {
         console.error(err);
         alert("Failed to load JD history.");
@@ -105,7 +41,7 @@ export default function JDHistory() {
 
       {!loading && history.length === 0 && <p>No JD history found.</p>}
 
-      {history.map((record, index) => (
+      {history.map((record) => (
         <div
           key={record._id}
           style={{
@@ -118,36 +54,39 @@ export default function JDHistory() {
           <br />
           <small>{new Date(record.createdAt).toLocaleString()}</small>
 
-          {record.parsed && (
-            <div style={{ marginTop: "12px" }}>
-              {record.parsed.map((section, sIdx) => (
-                <div key={sIdx} style={{ marginBottom: "10px" }}>
-                  <div
-                    onClick={() => toggleSection(index, sIdx)}
-                    style={{
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                      padding: "6px",
-                      background: "#eee",
-                    }}
-                  >
-                    {section.title} {section.open ? "▲" : "▼"}
-                  </div>
+          <p><b>Match Score:</b> {record.matchScore ?? "N/A"}</p>
+          <p><b>Fit Verdict:</b> {record.fitVerdict ?? "N/A"}</p>
 
-                  {section.open && (
-                    <div
-                      style={{
-                        padding: "12px 16px",
-                        border: "1px solid #ddd",
-                        borderTop: "none",
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {section.content}
-                    </div>
-                  )}
-                </div>
-              ))}
+          <button
+            onClick={() => toggleExpand(record._id)}
+            style={{
+              marginTop: "10px",
+              padding: "6px 12px",
+              cursor: "pointer",
+              background: expanded[record._id] ? "#444" : "#000",
+              color: "white",
+              border: "none",
+            }}
+          >
+            {expanded[record._id] ? "Hide Details ▲" : "Show Details ▼"}
+          </button>
+
+          {expanded[record._id] && (
+            <div style={{ marginTop: "15px" }}>
+              <h4>Top Strengths Based on JD</h4>
+              <ul>{record.strengthsBasedOnJD?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Missing Skills</h4>
+              <ul>{record.missingSkills?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Recommended Keywords</h4>
+              <ul>{record.recommendedKeywords?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Tailored Bullet Suggestions</h4>
+              <ul>{record.tailoredBulletSuggestions?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+              <h4>Improvement Tips</h4>
+              <ul>{record.improvementTips?.map((s, i) => <li key={i}>{s}</li>)}</ul>
             </div>
           )}
         </div>

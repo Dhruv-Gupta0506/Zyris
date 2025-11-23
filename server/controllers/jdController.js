@@ -2,6 +2,27 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const JobAnalysis = require("../models/JobAnalysis");
 const ResumeAnalysis = require("../models/ResumeAnalysis");
 
+// ---- helper to parse JSON safely ----
+function parseGeminiJson(text) {
+  if (!text) return null;
+
+  try {
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      return JSON.parse(trimmed);
+    }
+    const match = trimmed.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+    return null;
+  } catch (err) {
+    console.error("JD JSON PARSE ERROR:", err.message);
+    return null;
+  }
+}
+
+// ===============================
+// ANALYZE JD (Portfolio Killer Level)
+// ===============================
 exports.analyzeJob = async (req, res) => {
   try {
     const { jobTitle, jobDescription } = req.body;
@@ -12,13 +33,13 @@ exports.analyzeJob = async (req, res) => {
       });
     }
 
-    // ✅ Get latest resume analysis of this user
+    // ✅ get latest resume analysis for the user
     const latestResume = await ResumeAnalysis.findOne({ user: req.user })
       .sort({ createdAt: -1 });
 
     if (!latestResume) {
       return res.status(400).json({
-        message: "No resume analysis found. Please analyze your resume first.",
+        message: "No resume analysis found. Analyze resume first.",
       });
     }
 
@@ -26,87 +47,101 @@ exports.analyzeJob = async (req, res) => {
 
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
-      generationConfig: {
-        temperature: 0.15,
-        topP: 0.85,
-        topK: 30,
-      },
+      generationConfig: { temperature: 0.15 },
     });
 
+    // 🔥 OPTION-C PROMPT
     const prompt = `
-You are an expert ATS + recruiter alignment evaluator.
+You are an ATS match engine and senior recruiter.
+Compare this JOB DESCRIPTION against this CANDIDATE RESUME ANALYSIS.
 
-You are given:
-✅ Job Description
-✅ Candidate Resume Analysis (skills, strengths, weaknesses, keywords)
+RETURN ONLY VALID JSON with this EXACT structure:
 
-Produce a **short, highly useful JD match evaluation** with the following sections ONLY:
+{
+  "matchScore": number,
+  "fitVerdict": "Yes" | "Maybe" | "No",
+  "strengthsBasedOnJD": [ "point1", "point2", ... ],
+  "missingSkills": [ "skill1", "skill2", ... ],
+  "recommendedKeywords": [ "keyword1", "keyword2", ... ],
+  "tailoredBulletSuggestions": [ "bullet1", "bullet2", ... ],
+  "improvementTips": [ "tip1", "tip2", ... ]
+}
 
-1. **Match Score (0-100)** — based on skills, relevance, domain fit, and keywords
-2. **Top Strengths Based on JD** — max 4 bullet points
-3. **Missing / Important Skills** — max 5 bullet points
-4. **Recommended Keywords to Add** — max 6, ATS-friendly
-5. **Tailored Resume Bullet Suggestions** — 2 bullets the candidate can paste directly into resume
-6. **Fit Verdict (Yes / Maybe / No)** — short reasoning
-7. **Improvement Tips** — max 4 bullets, practical & realistic
+Evaluation rules:
+- matchScore must reflect real alignment, not generic keywords
+- reward relevance, domain fit, demonstrated experience
+- penalize missing core competencies
+- bullet rewrites must be copy-paste ready
+- missing skills must be realistic, not random
+- recommended keywords must be ATS-optimized
+- verdict must be honest, not encouraging
 
-Tone rules:
-- concise
-- no fluff
-- no long paragraphs
-- must save user time
-- must feel actionable, not generic
-
-JOB TITLE: ${jobTitle || "Not specified"}
+JOB TITLE:
+${jobTitle || "Not specified"}
 
 JOB DESCRIPTION:
 ${jobDescription}
 
-CANDIDATE RESUME INSIGHTS:
-${latestResume.analysisText}
-`;
+CANDIDATE RESUME DATA:
+${JSON.stringify(latestResume, null, 2)}
+`.trim();
 
     const result = await model.generateContent([{ text: prompt }]);
-    const analysisText = result.response.text();
 
-    // ✅ Save to DB
+    const rawText = result.response.text();
+    const parsed = parseGeminiJson(rawText) || {};
+
+    // ✅ save structured record
     const saved = await JobAnalysis.create({
       user: req.user,
       jobTitle,
       jobDescription,
-      analysisText,
+      matchScore: parsed.matchScore ?? null,
+      fitVerdict: parsed.fitVerdict ?? null,
+      strengthsBasedOnJD: parsed.strengthsBasedOnJD ?? [],
+      missingSkills: parsed.missingSkills ?? [],
+      recommendedKeywords: parsed.recommendedKeywords ?? [],
+      tailoredBulletSuggestions: parsed.tailoredBulletSuggestions ?? [],
+      improvementTips: parsed.improvementTips ?? [],
+      comparedResumeId: latestResume._id,
+      rawText,
     });
 
     return res.json({
       success: true,
-      analysis: analysisText,
-      id: saved._id,
+      analysis: saved,
     });
 
   } catch (err) {
     console.error("JD ANALYSIS ERROR:", err);
     return res.status(500).json({
+      success: false,
       message: "Job analysis failed",
       error: err.message,
     });
   }
 };
 
-
-// ✅ JD HISTORY
+// ===============================
+// HISTORY
+// ===============================
 exports.history = async (req, res) => {
   try {
     const records = await JobAnalysis.find({ user: req.user })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .select("-rawText -__v")
+      .lean();
 
     return res.json({
       success: true,
+      count: records.length,
       history: records,
     });
 
   } catch (err) {
     console.error("JD HISTORY ERROR:", err);
     return res.status(500).json({
+      success: false,
       message: "Failed to load JD history",
       error: err.message,
     });
