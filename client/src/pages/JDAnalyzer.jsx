@@ -1,6 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
-import API_URL from "../api/api";
+import API_URL from "../api/api"; // make sure this points to your backend base URL
 
 export default function JDAnalyzer() {
   const [jobTitle, setJobTitle] = useState("");
@@ -32,6 +32,7 @@ export default function JDAnalyzer() {
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         }
       );
@@ -50,7 +51,6 @@ export default function JDAnalyzer() {
       <h2>Job Description Analyzer</h2>
 
       <form onSubmit={handleSubmit} style={{ marginTop: "20px" }}>
-
         <div style={{ marginBottom: "15px" }}>
           <label style={{ display: "block", marginBottom: "5px" }}>
             Job Title (optional):
@@ -99,6 +99,21 @@ export default function JDAnalyzer() {
           <p><b>Job Title:</b> {analysis.jobTitle ?? "Not specified"}</p>
           <p><b>Match Score:</b> {analysis.matchScore ?? "N/A"}</p>
           <p><b>Fit Verdict:</b> {analysis.fitVerdict ?? "N/A"}</p>
+
+          <h4>Score Breakdown</h4>
+          <ul>
+            <li>Technical Skills: {analysis.scoreBreakdown?.technicalSkills ?? "N/A"}</li>
+            <li>Fundamentals & DSA: {analysis.scoreBreakdown?.fundamentalsAndDSA ?? "N/A"}</li>
+            <li>Project Relevance: {analysis.scoreBreakdown?.projectRelevance ?? "N/A"}</li>
+            <li>Engineering Practices: {analysis.scoreBreakdown?.softwareEngineeringPractices ?? "N/A"}</li>
+            <li>ATS Keyword Match: {analysis.scoreBreakdown?.atsKeywordMatch ?? "N/A"}</li>
+          </ul>
+
+          <h4>Explicit Requirements</h4>
+          <ul>{analysis.explicitRequirements?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+
+          <h4>Implicit Requirements</h4>
+          <ul>{analysis.implicitRequirements?.map((s, i) => <li key={i}>{s}</li>)}</ul>
 
           <h4>Top Strengths Based on JD</h4>
           <ul>{analysis.strengthsBasedOnJD?.map((s, i) => <li key={i}>{s}</li>)}</ul>

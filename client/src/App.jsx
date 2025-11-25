@@ -6,15 +6,22 @@ import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
+
 import ResumeAnalyzer from "./pages/ResumeAnalyzer";
 import ResumeHistory from "./pages/ResumeHistory";
+
 import JDAnalyzer from "./pages/JDAnalyzer";
 import JDHistory from "./pages/JDHistory";
-import InterviewHistory from "./pages/InterviewHistory";
+
 import MockInterview from "./pages/MockInterview";
+import InterviewHistory from "./pages/InterviewHistory";
+
 import MatchEngine from "./pages/MatchEngine";
+import MatchHistory from "./pages/MatchHistory";
+
 import TailoredResume from "./pages/TailoredResume";
-import CoverLetter from "./pages/CoverLetter";
+import TailoredHistory from "./pages/TailoredHistory";
+
 
 function App() {
   return (
@@ -22,6 +29,7 @@ function App() {
       <Navbar />
 
       <Routes>
+
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
@@ -37,6 +45,7 @@ function App() {
           }
         />
 
+        {/* Resume */}
         <Route
           path="/resume"
           element={
@@ -45,7 +54,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/history"
           element={
@@ -54,6 +62,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Job Description */}
         <Route
           path="/jd"
           element={
@@ -70,6 +80,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Mock Interview */}
         <Route
           path="/interview"
           element={
@@ -86,6 +98,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Match Engine */}
         <Route
           path="/match-engine"
           element={
@@ -95,6 +109,16 @@ function App() {
           }
         />
         <Route
+          path="/match-history"
+          element={
+            <ProtectedRoute>
+              <MatchHistory />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Tailored Resume */}
+        <Route
           path="/tailored-resume"
           element={
             <ProtectedRoute>
@@ -103,10 +127,10 @@ function App() {
           }
         />
         <Route
-          path="/cover-letter"
+          path="/tailored-history"
           element={
             <ProtectedRoute>
-              <CoverLetter />
+              <TailoredHistory />
             </ProtectedRoute>
           }
         />

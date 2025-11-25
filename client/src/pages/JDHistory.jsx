@@ -21,7 +21,7 @@ export default function JDHistory() {
           },
         });
 
-        setHistory(res.data.history);
+        setHistory(res.data.history || []);
       } catch (err) {
         console.error(err);
         alert("Failed to load JD history.");
@@ -48,6 +48,7 @@ export default function JDHistory() {
             marginTop: "20px",
             padding: "12px",
             border: "1px solid #ccc",
+            borderRadius: "4px",
           }}
         >
           <strong>🧾 {record.jobTitle || "Untitled Role"}</strong>
@@ -66,6 +67,7 @@ export default function JDHistory() {
               background: expanded[record._id] ? "#444" : "#000",
               color: "white",
               border: "none",
+              borderRadius: "4px",
             }}
           >
             {expanded[record._id] ? "Hide Details ▲" : "Show Details ▼"}
@@ -73,20 +75,84 @@ export default function JDHistory() {
 
           {expanded[record._id] && (
             <div style={{ marginTop: "15px" }}>
+
+              {/* ------------------------
+                  FULL JD ANALYZER SECTIONS
+                  ------------------------ */}
+
+              <h4>Score Breakdown</h4>
+              <ul>
+                <li>
+                  Technical Skills:{" "}
+                  {record.scoreBreakdown?.technicalSkills ?? "N/A"}
+                </li>
+                <li>
+                  Fundamentals & DSA:{" "}
+                  {record.scoreBreakdown?.fundamentalsAndDSA ?? "N/A"}
+                </li>
+                <li>
+                  Project Relevance:{" "}
+                  {record.scoreBreakdown?.projectRelevance ?? "N/A"}
+                </li>
+                <li>
+                  Engineering Practices:{" "}
+                  {record.scoreBreakdown?.softwareEngineeringPractices ?? "N/A"}
+                </li>
+                <li>
+                  ATS Keyword Match:{" "}
+                  {record.scoreBreakdown?.atsKeywordMatch ?? "N/A"}
+                </li>
+              </ul>
+
+              <h4>Explicit Requirements</h4>
+              <ul>
+                {record.explicitRequirements?.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+
+              <h4>Implicit Requirements</h4>
+              <ul>
+                {record.implicitRequirements?.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+
               <h4>Top Strengths Based on JD</h4>
-              <ul>{record.strengthsBasedOnJD?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <ul>
+                {record.strengthsBasedOnJD?.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
 
               <h4>Missing Skills</h4>
-              <ul>{record.missingSkills?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <ul>
+                {record.missingSkills?.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
 
-              <h4>Recommended Keywords</h4>
-              <ul>{record.recommendedKeywords?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <h4>Recommended Keywords to Add</h4>
+              <ul>
+                {record.recommendedKeywords?.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
 
-              <h4>Tailored Bullet Suggestions</h4>
-              <ul>{record.tailoredBulletSuggestions?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <h4>Tailored Resume Bullet Suggestions</h4>
+              <ul>
+                {record.tailoredBulletSuggestions?.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
 
               <h4>Improvement Tips</h4>
-              <ul>{record.improvementTips?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <ul>
+                {record.improvementTips?.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+
             </div>
           )}
         </div>

@@ -1,3 +1,4 @@
+// frontend/components/ResumeAnalyzer.jsx
 import { useState } from "react";
 import axios from "axios";
 import API_URL from "../api/api";
@@ -11,9 +12,23 @@ export default function ResumeAnalyzer() {
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
 
-    if (selected && selected.type !== "application/pdf") {
+    if (!selected) {
+      setFile(null);
+      return;
+    }
+
+    if (selected.type !== "application/pdf") {
       alert("Only PDF files are allowed!");
       e.target.value = "";
+      setFile(null);
+      return;
+    }
+
+    // Optional: file size client-side guard (5MB)
+    if (selected.size > 5 * 1024 * 1024) {
+      alert("Please upload a PDF smaller than 5MB.");
+      e.target.value = "";
+      setFile(null);
       return;
     }
 
@@ -28,12 +43,16 @@ export default function ResumeAnalyzer() {
       return;
     }
 
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("You are not logged in.");
+      return;
+    }
+
+    setLoading(true);
+    setAnalysis(null);
+
     try {
-      setLoading(true);
-      setAnalysis(null);
-
-      const token = localStorage.getItem("token");
-
       const formData = new FormData();
       formData.append("resume", file);
       formData.append("targetRole", targetRole);
@@ -43,17 +62,22 @@ export default function ResumeAnalyzer() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data",
         },
+        timeout: 120000, // 2 minutes - AI may take time
       });
 
       setAnalysis(res.data.analysis);
-
     } catch (err) {
       console.error(err);
-      alert("Failed to analyze resume.");
+      const message = err.response?.data?.message || "Failed to analyze resume.";
+      alert(message);
     } finally {
       setLoading(false);
     }
   };
+
+  // Safe display helpers
+  const safeNum = (n) => (typeof n === "number" ? n : "N/A");
+  const safeArr = (a) => (Array.isArray(a) && a.length ? a : []);
 
   return (
     <div style={{ padding: "20px" }}>
@@ -65,12 +89,7 @@ export default function ResumeAnalyzer() {
             Select Resume (PDF only):
           </label>
 
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={handleFileChange}
-            style={{ padding: "5px" }}
-          />
+          <input type="file" accept="application/pdf" onChange={handleFileChange} />
         </div>
 
         <div style={{ marginBottom: "15px" }}>
@@ -112,52 +131,56 @@ export default function ResumeAnalyzer() {
         <div style={{ marginTop: "30px" }}>
           <h3>Resume Analysis</h3>
 
-          <p><b>Target Role:</b> {analysis.targetRole ?? "Not specified"}</p>
+          <p>
+            <b>Target Role:</b> {analysis.targetRole ?? "Not specified"}
+          </p>
 
-          <p><b>ATS Score:</b> {analysis.atsScore ?? "N/A"}</p>
+          <p>
+            <b>ATS Score:</b> {safeNum(analysis.atsScore)}
+          </p>
 
           {analysis.scoringBreakdown && (
             <>
               <h4>Scoring Breakdown</h4>
               <ul>
-                <li>Keyword Match: {analysis.scoringBreakdown.keywordMatch}</li>
-                <li>Action Verbs: {analysis.scoringBreakdown.actionVerbs}</li>
-                <li>Quantified Results: {analysis.scoringBreakdown.quantifiedResults}</li>
-                <li>Formatting Clarity: {analysis.scoringBreakdown.formattingClarity}</li>
-                <li>Relevance Alignment: {analysis.scoringBreakdown.relevanceAlignment}</li>
+                <li>Keyword Match: {safeNum(analysis.scoringBreakdown.keywordMatch)}</li>
+                <li>Action Verbs: {safeNum(analysis.scoringBreakdown.actionVerbs)}</li>
+                <li>Quantified Results: {safeNum(analysis.scoringBreakdown.quantifiedResults)}</li>
+                <li>Formatting Clarity: {safeNum(analysis.scoringBreakdown.formattingClarity)}</li>
+                <li>Relevance Alignment: {safeNum(analysis.scoringBreakdown.relevanceAlignment)}</li>
               </ul>
             </>
           )}
 
           <h4>Skills</h4>
-          <ul>{analysis.skills?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul>{safeArr(analysis.skills).map((s, i) => <li key={i}>{s}</li>)}</ul>
 
           <h4>Strengths</h4>
-          <ul>{analysis.strengths?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul>{safeArr(analysis.strengths).map((s, i) => <li key={i}>{s}</li>)}</ul>
 
           <h4>Weaknesses</h4>
-          <ul>{analysis.weaknesses?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul>{safeArr(analysis.weaknesses).map((s, i) => <li key={i}>{s}</li>)}</ul>
 
           <h4>Missing Keywords</h4>
-          <ul>{analysis.missingKeywords?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul>{safeArr(analysis.missingKeywords).map((s, i) => <li key={i}>{s}</li>)}</ul>
 
           <h4>Suggested Roles</h4>
-          <ul>{analysis.suggestedRoles?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul>{safeArr(analysis.suggestedRoles).map((s, i) => <li key={i}>{s}</li>)}</ul>
 
           <h4>Recruiter Impression</h4>
-          <p>{analysis.recruiterImpression}</p>
+          <p>{analysis.recruiterImpression ?? "N/A"}</p>
 
           <h4>Improvement Checklist</h4>
-          <ul>{analysis.improvementChecklist?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul>{safeArr(analysis.improvementChecklist).map((s, i) => <li key={i}>{s}</li>)}</ul>
 
           <h4>Summary Rewrite</h4>
-          <p>{analysis.summaryRewrite}</p>
+          <p>{analysis.summaryRewrite ?? "N/A"}</p>
 
           <h4>Project Rewrites</h4>
-          <ul>{analysis.projectRewrites?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul>{safeArr(analysis.projectRewrites).map((s, i) => <li key={i}>{s}</li>)}</ul>
 
           <h4>Bullet Rewrites</h4>
-          <ul>{analysis.bulletRewrites?.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul>{safeArr(analysis.bulletRewrites).map((s, i) => <li key={i}>{s}</li>)}</ul>
         </div>
       )}
     </div>

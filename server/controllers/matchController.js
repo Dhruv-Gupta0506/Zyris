@@ -1,252 +1,261 @@
+// controllers/matchController.js
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const ResumeAnalysis = require("../models/ResumeAnalysis");
 const JobAnalysis = require("../models/JobAnalysis");
+const MatchAnalysis = require("../models/MatchAnalysis");
 
-// Helper: normalize strings for comparison
-function norm(str) {
-  return String(str || "").toLowerCase().trim();
+// ---------- Helpers ----------
+function norm(s) {
+  return String(s || "").toLowerCase().trim();
 }
 
-// Helper: detect broad role category from job title / target role
-function getRoleCategory(jobTitle, targetRole) {
-  const text = norm(jobTitle || "") + " " + norm(targetRole || "");
-
-  if (text.includes("frontend") || text.includes("front-end") || text.includes("ui"))
-    return "frontend";
-
-  if (text.includes("backend") || text.includes("back-end") || text.includes("api"))
-    return "backend";
-
-  if (text.includes("full stack") || text.includes("full-stack") || text.includes("mern"))
-    return "fullstack";
-
-  if (
-    text.includes("data engineer") ||
-    text.includes("data analyst") ||
-    text.includes("analytics")
-  )
-    return "data";
-
-  if (
-    text.includes("machine learning") ||
-    text.includes("ml ") ||
-    text.includes("ml/ai") ||
-    text.includes("ai ") ||
-    text.includes("data scientist")
-  )
-    return "ml-ai";
-
-  if (text.includes("mobile") || text.includes("android") || text.includes("ios"))
-    return "mobile";
-
-  // default
-  return "software-engineer";
+function safeArr(a) {
+  return Array.isArray(a) ? a : [];
 }
 
+function clamp(n, min, max) {
+  if (typeof n !== "number" || Number.isNaN(n)) return null;
+  return Math.max(min, Math.min(max, n));
+}
+
+// robust JSON extraction from model text
+function parseGeminiJson(text) {
+  if (!text || typeof text !== "string") return null;
+  try {
+    const t = text.trim();
+    if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
+      return JSON.parse(t);
+    }
+    const objMatch = t.match(/\{[\s\S]*\}/);
+    if (objMatch) return JSON.parse(objMatch[0]);
+    const arrMatch = t.match(/\[[\s\S]*\]/);
+    if (arrMatch) return JSON.parse(arrMatch[0]);
+    return null;
+  } catch (err) {
+    console.error("PARSE GEMINI JSON ERROR:", err.message);
+    return null;
+  }
+}
+
+// fallback deterministic heuristic when AI output invalid
+function deterministicFallback(resume, job) {
+  const resumeSkills = new Set((resume.skills || []).map((s) => norm(s)));
+  const jdMissing = (job.missingSkills || []).map((s) => norm(s));
+
+  let present = 0;
+  jdMissing.forEach((ms) => {
+    if (resumeSkills.has(ms)) present++;
+  });
+  const coreAlignment = Math.round((present / (jdMissing.length || 1)) * 100);
+
+  const recommended = (job.recommendedKeywords || []).slice(0, 8).map((s) => String(s));
+  const matchingSkills = (resume.skills || []).filter((s) =>
+    recommended.map(norm).includes(norm(s))
+  );
+
+  const missingImportant = (job.missingSkills || []).slice(0, 8);
+
+  const overallScore = Math.round(
+    ((resume.atsScore || 50) * 0.3) +
+    ((job.matchScore || 50) * 0.2) +
+    (coreAlignment * 0.3) +
+    (50 * 0.2)
+  );
+
+  const hiringProbability = Math.max(0, Math.min(100, overallScore - 5));
+
+  return {
+    overallScore,
+    hiringProbability,
+    roleCategory: "software-engineer",
+    competencies: [],
+    strengths: (resume.strengths || []).slice(0, 5),
+    weaknesses: (resume.weaknesses || []).slice(0, 5),
+    matchingSkills,
+    missingSkills: missingImportant,
+    recruiterObjections: ["Not enough evidence of fundamentals or system design."],
+    recruiterStrengths: (job.strengthsBasedOnJD || []).slice(0, 5),
+    scoreBoostEstimate: missingImportant.length > 0 ? "+15 to +25 if key gaps closed." : "+5 to +10 with polish.",
+    verdict:
+      overallScore >= 75
+        ? "Strong Fit"
+        : overallScore >= 60
+        ? "Competitive"
+        : overallScore >= 45
+        ? "Weak Fit"
+        : "Not Suitable",
+    jobTitle: job.jobTitle || null,
+    resumeFileName: resume.fileName || null,
+    targetRole: resume.targetRole || null,
+    rawText: null,
+  };
+}
+
+// ===============================
+// ANALYZE MATCH - FAANG-GRADE
+// ===============================
 exports.analyzeMatch = async (req, res) => {
   try {
     const { resumeId, jobId } = req.body;
-
     if (!resumeId || !jobId) {
-      return res.status(400).json({
-        success: false,
-        message: "resumeId and jobId are required",
-      });
+      return res.status(400).json({ success: false, message: "resumeId and jobId are required" });
     }
 
-    // Get resume + JD, and ensure they belong to this user
     const [resume, job] = await Promise.all([
-      ResumeAnalysis.findOne({ _id: resumeId, user: req.user }),
-      JobAnalysis.findOne({ _id: jobId, user: req.user }),
+      ResumeAnalysis.findOne({ _id: resumeId, user: req.user }).lean(),
+      JobAnalysis.findOne({ _id: jobId, user: req.user }).lean(),
     ]);
 
-    if (!resume) {
-      return res.status(404).json({
-        success: false,
-        message: "Resume analysis not found for this user",
-      });
-    }
+    if (!resume) return res.status(404).json({ success: false, message: "Resume analysis not found" });
+    if (!job) return res.status(404).json({ success: false, message: "Job analysis not found" });
 
-    if (!job) {
-      return res.status(404).json({
-        success: false,
-        message: "Job analysis not found for this user",
-      });
-    }
-
-    const roleCategory = getRoleCategory(job.jobTitle, resume.targetRole);
-
-    const atsScore =
-      typeof resume.atsScore === "number" ? resume.atsScore : null;
-    const jdMatchScore =
-      typeof job.matchScore === "number" ? job.matchScore : null;
-
-    // ---------- Core skill alignment heuristic ----------
-    const resumeSkills = (resume.skills || []).map(norm);
-    const missingSkills = (job.missingSkills || []).map(norm);
-    const recommendedKeywords = (job.recommendedKeywords || []).map(norm);
-
-    const resumeSkillSet = new Set(resumeSkills);
-
-    // For SWE / backend / fullstack, treat DS/Algo as critical
-    const criticalKeywords = ["data structures", "algorithms", "dsa"];
-    const hasCriticalOnResume = criticalKeywords.some((kw) =>
-      resumeSkillSet.has(kw)
-    );
-    const missingCritical = criticalKeywords.filter((kw) =>
-      missingSkills.includes(kw)
-    );
-
-    // Base core alignment from how many JD missing skills are already present
-    let presentCount = 0;
-    missingSkills.forEach((ms) => {
-      if (resumeSkillSet.has(ms)) presentCount++;
-    });
-    const totalRelevant = missingSkills.length || 1;
-    let coreAlignment = Math.round((presentCount / totalRelevant) * 100);
-
-    // Penalize hard if SWE-type role and DS/Algo missing
-    if (
-      ["software-engineer", "backend", "fullstack", "ml-ai"].includes(
-        roleCategory
-      )
-    ) {
-      if (!hasCriticalOnResume) {
-        coreAlignment = Math.min(coreAlignment, 50);
-      }
-      if (missingCritical.length > 0) {
-        coreAlignment = Math.min(coreAlignment, 40);
-      }
-    }
-
-    // ---------- Impact score heuristic (based on metrics in bullets) ----------
-    const allBullets = [
-      ...(resume.projectRewrites || []),
-      ...(resume.bulletRewrites || []),
-      ...(job.tailoredBulletSuggestions || []),
-    ];
-
-    let metricCount = 0;
-    allBullets.forEach((b) => {
-      if (/\d+%/.test(b) || /\d+\s*(users|requests|projects|tickets)/i.test(b)) {
-        metricCount++;
-      }
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      generationConfig: { temperature: 0.12, maxOutputTokens: 2500 },
     });
 
-    const impactScore =
-      allBullets.length === 0
-        ? null
-        : Math.max(
-            30,
-            Math.min(100, Math.round((metricCount / allBullets.length) * 100))
-          ); // at least 30 if there is *some* impact
+    const prompt = `
+You are a FAANG-level hiring analyst...
 
-    // ---------- Experience fit heuristic ----------
-    // Very rough: more weaknesses = lower fit
-    const weaknessesCount = (resume.weaknesses || []).length;
-    let experienceFitScore = 80;
-    if (weaknessesCount >= 3) experienceFitScore = 60;
-    if (weaknessesCount >= 5) experienceFitScore = 45;
+STRICT OUTPUT SCHEMA:
+{
+  "overallScore": number,
+  "hiringProbability": number,
+  "roleCategory": "frontend"|"backend"|"fullstack"|"data"|"ml-ai"|"mobile"|"software-engineer",
+  "competencies": [
+    { "name": "React.js", "resumeLevel": number, "jdLevel": number, "gap": number }
+  ],
+  "strengths": [ "text" ],
+  "weaknesses": [ "text" ],
+  "matchingSkills": [ "text" ],
+  "missingSkills": [ "text" ],
+  "recruiterObjections": [ "text" ],
+  "recruiterStrengths": [ "text" ],
+  "scoreBoostEstimate": "text",
+  "verdict": "Strong Fit" | "Competitive" | "Weak Fit" | "Not Suitable",
+  "jobTitle": "text or null",
+  "resumeFileName": "text or null",
+  "targetRole": "text or null"
+}
 
-    // ---------- Overall Score ----------
-    // weight by roleCategory a bit
-    let overallScore = null;
-    if (atsScore !== null && jdMatchScore !== null) {
-      // base from ats + jd match
-      let base = atsScore * 0.25 + jdMatchScore * 0.25;
+Return JSON only.
+`;
 
-      // add core alignment
-      base += coreAlignment * 0.30;
+    const result = await model.generateContent([{ text: prompt }]);
+    const rawText = result.response.text();
+    const parsed = parseGeminiJson(rawText);
 
-      // add impact if available
-      if (impactScore !== null) {
-        base += impactScore * 0.10;
-      } else {
-        base += 50 * 0.10; // neutral
-      }
+    let safeOutput = null;
 
-      // add experience fit
-      base += experienceFitScore * 0.10;
-
-      overallScore = Math.round(base);
-      overallScore = Math.max(0, Math.min(100, overallScore));
-    }
-
-    // ---------- Readiness level ----------
-    const missingCount = (job.missingSkills || []).length;
-
-    let readinessLevel = "Needs Improvement";
-
-    if (overallScore === null) {
-      readinessLevel = "Not Enough Data";
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      safeOutput = deterministicFallback(resume, job);
+      safeOutput.rawText = rawText || null;
     } else {
-      if (overallScore >= 80 && missingCount <= 1) {
-        readinessLevel = "Strong Fit";
-      } else if (overallScore >= 65 && missingCount <= 3) {
-        readinessLevel = "Competitive but Needs Strengthening";
-      } else if (overallScore >= 50) {
-        readinessLevel = "Weak Fit — Skill Gaps";
-      } else {
-        readinessLevel = "Not Suitable for This Role Type";
-      }
+      const overallScore = clamp(parsed.overallScore, 0, 100);
+      const hiringProbability = clamp(parsed.hiringProbability, 0, 100);
+
+      const allowedRoles = ["frontend", "backend", "fullstack", "data", "ml-ai", "mobile", "software-engineer"];
+      const roleCategory = allowedRoles.includes(parsed.roleCategory)
+        ? parsed.roleCategory
+        : "software-engineer";
+
+      const competencies = Array.isArray(parsed.competencies)
+        ? parsed.competencies.slice(0, 12).map((c) => ({
+            name: String(c.name || "").trim(),
+            resumeLevel: clamp(Number(c.resumeLevel), 0, 10),
+            jdLevel: clamp(Number(c.jdLevel), 0, 10),
+            gap:
+              typeof c.gap === "number"
+                ? clamp(Number(c.gap), -10, 10)
+                : clamp(Number(c.jdLevel) - Number(c.resumeLevel), -10, 10),
+          }))
+        : [];
+
+      const strengths = safeArr(parsed.strengths).slice(0, 8);
+      const weaknesses = safeArr(parsed.weaknesses).slice(0, 8);
+      const matchingSkills = safeArr(parsed.matchingSkills).slice(0, 40);
+      const missingSkills = safeArr(parsed.missingSkills).slice(0, 40);
+      const recruiterObjections = safeArr(parsed.recruiterObjections).slice(0, 8);
+      const recruiterStrengths = safeArr(parsed.recruiterStrengths).slice(0, 8);
+      const scoreBoostEstimate = parsed.scoreBoostEstimate
+        ? String(parsed.scoreBoostEstimate).slice(0, 200)
+        : null;
+
+      const verdict = ["Strong Fit", "Competitive", "Weak Fit", "Not Suitable"].includes(parsed.verdict)
+        ? parsed.verdict
+        : overallScore >= 75
+        ? "Strong Fit"
+        : overallScore >= 60
+        ? "Competitive"
+        : overallScore >= 45
+        ? "Weak Fit"
+        : "Not Suitable";
+
+      safeOutput = {
+        overallScore,
+        hiringProbability,
+        roleCategory,
+        competencies,
+        strengths,
+        weaknesses,
+        matchingSkills,
+        missingSkills,
+        recruiterObjections,
+        recruiterStrengths,
+        scoreBoostEstimate,
+        verdict,
+        jobTitle: parsed.jobTitle || job.jobTitle || null,
+        resumeFileName: parsed.resumeFileName || resume.fileName || null,
+        targetRole: parsed.targetRole || resume.targetRole || null,
+        rawText,
+      };
     }
 
-    // ---------- Skill overlap (fixed) ----------
-    // For now, don't mark your entire stack as irrelevant.
-    const matchingSkills = [];
-    const missingImportant = job.missingSkills || [];
-
-    // "Irrelevant" is dangerous to guess without strong JD tech signals,
-    // so for portfolio quality we simply don't label them aggressively.
-    const irrelevantSkills = [];
-
-    const improvementFocus = [
-      ...(job.missingSkills || []).slice(0, 3),
-      ...(job.improvementTips || []).slice(0, 2),
-      ...(resume.improvementChecklist || []).slice(0, 2),
-    ];
-
-    const optimizedBullets = [
-      ...(job.tailoredBulletSuggestions || []),
-      ...(resume.bulletRewrites || []),
-    ];
-
-    // Rough estimate of potential score boost
-    let scoreBoostEstimate = null;
-    if (missingCount > 0) {
-      scoreBoostEstimate = "+15 to +25 if you close key gaps and add proof (DSA, testing, metrics).";
-    } else if (overallScore && overallScore < 80) {
-      scoreBoostEstimate = "+5 to +10 with polish and stronger impact bullets.";
-    } else {
-      scoreBoostEstimate = "Already near-optimal for this JD; focus on interview prep.";
-    }
+    const matchDoc = await MatchAnalysis.create({
+      user: req.user,
+      resumeId: resume._id,
+      jobId: job._id,
+      ...safeOutput,
+    });
 
     return res.json({
       success: true,
-      overallScore,
-      atsScore,
-      jdMatchScore,
-      readinessLevel,
-      roleCategory,
-      jobTitle: job.jobTitle,
-      resumeFileName: resume.fileName,
-      targetRole: resume.targetRole,
-      skillOverlap: {
-        matchingSkills,
-        missingImportant,
-        irrelevantSkills,
+      match: {
+        id: matchDoc._id,
+        ...safeOutput,
       },
-      improvementFocus,
-      optimizedBullets,
-      jobFitVerdict: job.fitVerdict,
-      jdMissingSkills: job.missingSkills || [],
-      jdRecommendedKeywords: job.recommendedKeywords || [],
-      scoreBoostEstimate,
     });
   } catch (err) {
     console.error("MATCH ANALYSIS ERROR:", err);
     return res.status(500).json({
       success: false,
       message: "Failed to compute resume-JD match",
+      error: err.message,
+    });
+  }
+};
+
+// ===============================
+// MATCH ANALYSIS HISTORY (NEW)
+// ===============================
+exports.matchHistory = async (req, res) => {
+  try {
+    const records = await MatchAnalysis.find({ user: req.user })
+      .sort({ createdAt: -1 })
+      .select("-rawText -__v")
+      .lean();
+
+    return res.json({
+      success: true,
+      count: records.length,
+      history: records,
+    });
+  } catch (err) {
+    console.error("MATCH HISTORY ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load match history",
       error: err.message,
     });
   }

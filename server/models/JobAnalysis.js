@@ -1,5 +1,16 @@
 const mongoose = require("mongoose");
 
+const ScoreBreakdownSchema = new mongoose.Schema(
+  {
+    technicalSkills: { type: Number, min: 0, max: 100, default: null },
+    fundamentalsAndDSA: { type: Number, min: 0, max: 100, default: null },
+    projectRelevance: { type: Number, min: 0, max: 100, default: null },
+    softwareEngineeringPractices: { type: Number, min: 0, max: 100, default: null },
+    atsKeywordMatch: { type: Number, min: 0, max: 100, default: null },
+  },
+  { _id: false }
+);
+
 const JobAnalysisSchema = new mongoose.Schema(
   {
     user: {
@@ -15,6 +26,13 @@ const JobAnalysisSchema = new mongoose.Schema(
     matchScore: { type: Number, min: 0, max: 100 },
 
     fitVerdict: { type: String }, // Yes / Maybe / No
+
+    // Score breakdown
+    scoreBreakdown: { type: ScoreBreakdownSchema, default: {} },
+
+    // Requirements
+    explicitRequirements: [String],
+    implicitRequirements: [String],
 
     // Structured insights
     strengthsBasedOnJD: [String],

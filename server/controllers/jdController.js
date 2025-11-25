@@ -5,14 +5,18 @@ const ResumeAnalysis = require("../models/ResumeAnalysis");
 // ---- helper to parse JSON safely ----
 function parseGeminiJson(text) {
   if (!text) return null;
-
   try {
     const trimmed = text.trim();
+
+    // Raw JSON
     if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
       return JSON.parse(trimmed);
     }
+
+    // Extract first JSON object block
     const match = trimmed.match(/\{[\s\S]*\}/);
     if (match) return JSON.parse(match[0]);
+
     return null;
   } catch (err) {
     console.error("JD JSON PARSE ERROR:", err.message);
@@ -21,7 +25,7 @@ function parseGeminiJson(text) {
 }
 
 // ===============================
-// ANALYZE JD (Portfolio Killer Level)
+// ANALYZE JD – ULTRA FINAL VERSION
 // ===============================
 exports.analyzeJob = async (req, res) => {
   try {
@@ -33,9 +37,8 @@ exports.analyzeJob = async (req, res) => {
       });
     }
 
-    // ✅ get latest resume analysis for the user
-    const latestResume = await ResumeAnalysis.findOne({ user: req.user })
-      .sort({ createdAt: -1 });
+    // Get latest resume analysis for this user
+    const latestResume = await ResumeAnalysis.findOne({ user: req.user }).sort({ createdAt: -1 });
 
     if (!latestResume) {
       return res.status(400).json({
@@ -47,34 +50,55 @@ exports.analyzeJob = async (req, res) => {
 
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
-      generationConfig: { temperature: 0.15 },
+      generationConfig: { temperature: 0.1 },
     });
 
-    // 🔥 OPTION-C PROMPT
+    // VERSION 2 – ULTIMATE FAANG-GRADE JD ANALYSIS PROMPT
     const prompt = `
-You are an ATS match engine and senior recruiter.
-Compare this JOB DESCRIPTION against this CANDIDATE RESUME ANALYSIS.
+You are an elite ATS system, FAANG hiring manager, and senior recruiter.
+Analyze the JOB DESCRIPTION and evaluate the candidate using the resume analysis.
 
-RETURN ONLY VALID JSON with this EXACT structure:
+Return ONLY valid JSON. No explanations. No commentary.
+
+STRICT JSON FORMAT (DO NOT BREAK):
 
 {
   "matchScore": number,
   "fitVerdict": "Yes" | "Maybe" | "No",
-  "strengthsBasedOnJD": [ "point1", "point2", ... ],
-  "missingSkills": [ "skill1", "skill2", ... ],
-  "recommendedKeywords": [ "keyword1", "keyword2", ... ],
-  "tailoredBulletSuggestions": [ "bullet1", "bullet2", ... ],
-  "improvementTips": [ "tip1", "tip2", ... ]
+
+  "scoreBreakdown": {
+    "technicalSkills": number,
+    "fundamentalsAndDSA": number,
+    "projectRelevance": number,
+    "softwareEngineeringPractices": number,
+    "atsKeywordMatch": number
+  },
+
+  "explicitRequirements": [ "text" ],
+  "implicitRequirements": [ "text" ],
+
+  "strengthsBasedOnJD": [ "text" ],
+  "missingSkills": [ "text" ],
+  "recommendedKeywords": [ "text" ],
+
+  "tailoredBulletSuggestions": [ "text" ],
+
+  "improvementTips": [ "text" ]
 }
 
-Evaluation rules:
-- matchScore must reflect real alignment, not generic keywords
-- reward relevance, domain fit, demonstrated experience
-- penalize missing core competencies
-- bullet rewrites must be copy-paste ready
-- missing skills must be realistic, not random
-- recommended keywords must be ATS-optimized
-- verdict must be honest, not encouraging
+SCORING RULES:
+- technicalSkills: match of required tech stack.
+- fundamentalsAndDSA: DSA, OOP, system design, complexity analysis.
+- projectRelevance: depth, complexity, real-world engineering.
+- softwareEngineeringPractices: testing, CI/CD, architecture, clean code.
+- atsKeywordMatch: coverage of required & related keywords.
+
+GUIDELINES:
+- Extract explicit (written) requirements AND implicit (unstated but expected) requirements.
+- Identify gaps: fundamentals, coding strength, system design, academic expectations.
+- Improvements must be measurable and actionable.
+- Bullet rewrites must be short, powerful, and resume-ready.
+- No generic filler content.
 
 JOB TITLE:
 ${jobTitle || "Not specified"}
@@ -84,25 +108,54 @@ ${jobDescription}
 
 CANDIDATE RESUME DATA:
 ${JSON.stringify(latestResume, null, 2)}
-`.trim();
+`;
 
     const result = await model.generateContent([{ text: prompt }]);
 
     const rawText = result.response.text();
     const parsed = parseGeminiJson(rawText) || {};
 
-    // ✅ save structured record
+    // Normalize parsed output to expected schema shapes
+    const safeParsed = {
+      matchScore: typeof parsed.matchScore === "number" ? parsed.matchScore : null,
+      fitVerdict: parsed.fitVerdict || null,
+      scoreBreakdown: parsed.scoreBreakdown || {
+        technicalSkills: null,
+        fundamentalsAndDSA: null,
+        projectRelevance: null,
+        softwareEngineeringPractices: null,
+        atsKeywordMatch: null,
+      },
+      explicitRequirements: Array.isArray(parsed.explicitRequirements) ? parsed.explicitRequirements : [],
+      implicitRequirements: Array.isArray(parsed.implicitRequirements) ? parsed.implicitRequirements : [],
+      strengthsBasedOnJD: Array.isArray(parsed.strengthsBasedOnJD) ? parsed.strengthsBasedOnJD : [],
+      missingSkills: Array.isArray(parsed.missingSkills) ? parsed.missingSkills : [],
+      recommendedKeywords: Array.isArray(parsed.recommendedKeywords) ? parsed.recommendedKeywords : [],
+      tailoredBulletSuggestions: Array.isArray(parsed.tailoredBulletSuggestions) ? parsed.tailoredBulletSuggestions : [],
+      improvementTips: Array.isArray(parsed.improvementTips) ? parsed.improvementTips : [],
+    };
+
+    // Save to DB
     const saved = await JobAnalysis.create({
       user: req.user,
       jobTitle,
       jobDescription,
-      matchScore: parsed.matchScore ?? null,
-      fitVerdict: parsed.fitVerdict ?? null,
-      strengthsBasedOnJD: parsed.strengthsBasedOnJD ?? [],
-      missingSkills: parsed.missingSkills ?? [],
-      recommendedKeywords: parsed.recommendedKeywords ?? [],
-      tailoredBulletSuggestions: parsed.tailoredBulletSuggestions ?? [],
-      improvementTips: parsed.improvementTips ?? [],
+
+      matchScore: safeParsed.matchScore,
+      fitVerdict: safeParsed.fitVerdict,
+
+      scoreBreakdown: safeParsed.scoreBreakdown,
+
+      explicitRequirements: safeParsed.explicitRequirements,
+      implicitRequirements: safeParsed.implicitRequirements,
+
+      strengthsBasedOnJD: safeParsed.strengthsBasedOnJD,
+      missingSkills: safeParsed.missingSkills,
+      recommendedKeywords: safeParsed.recommendedKeywords,
+
+      tailoredBulletSuggestions: safeParsed.tailoredBulletSuggestions,
+      improvementTips: safeParsed.improvementTips,
+
       comparedResumeId: latestResume._id,
       rawText,
     });
@@ -111,7 +164,6 @@ ${JSON.stringify(latestResume, null, 2)}
       success: true,
       analysis: saved,
     });
-
   } catch (err) {
     console.error("JD ANALYSIS ERROR:", err);
     return res.status(500).json({
@@ -137,7 +189,6 @@ exports.history = async (req, res) => {
       count: records.length,
       history: records,
     });
-
   } catch (err) {
     console.error("JD HISTORY ERROR:", err);
     return res.status(500).json({

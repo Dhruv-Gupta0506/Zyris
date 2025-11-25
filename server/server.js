@@ -3,8 +3,8 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const matchRoutes = require("./routes/matchRoutes");
-const tailorController = require("./routes/tailorRoutes");
-const coverLetterRoutes = require("./routes/coverLetterRoutes");
+const tailoredRoutes = require("./routes/tailoredRoutes");
+
 
 dotenv.config();
 connectDB();
@@ -29,11 +29,7 @@ app.use("/api/interview", require("./routes/interviewRoutes"));
 app.use("/api/match", matchRoutes);
 
 // TAILOR ROUTES
-app.use("/api/tailor", tailorController);
-
-// COVER LETTER ROUTES
-app.use("/api/cover-letter", coverLetterRoutes);
-
+app.use("/api/tailor", tailoredRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "CareerNexus API Running" });
