@@ -1,8 +1,11 @@
-const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { OAuth2Client } = require("google-auth-library");
 
-const JWT_SECRET = process.env.JWT_SECRET || "supersecret123";
+const JWT_SECRET = process.env.JWT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // Create JWT
 function generateToken(userId) {
@@ -10,60 +13,66 @@ function generateToken(userId) {
 }
 
 // ===================================================================================
-// GOOGLE LOGIN (GIS POPUP TOKEN)
+// GOOGLE LOGIN (GIS ID TOKEN — response.credential)
 // ===================================================================================
 exports.googleAuth = async (req, res) => {
   try {
-    const { access_token } = req.body;
+    const { credential } = req.body;
 
-    if (!access_token) {
-      return res.status(400).json({ message: "Google access_token missing" });
+    if (!credential) {
+      return res.status(400).json({ message: "Google ID token missing" });
     }
 
-    // Fetch Google user info
-    const googleRes = await axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
-      params: { access_token },
+    // Verify Google ID Token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
     });
 
-    const profile = googleRes.data;
+    const payload = ticket.getPayload();
+    const { email, name, picture, sub: googleId } = payload;
 
-    if (!profile || !profile.email) {
-      return res.status(400).json({ message: "Invalid Google user data" });
+    if (!email) {
+      return res.status(400).json({ message: "Invalid Google token" });
     }
 
-    // Check existing user
-    let user = await User.findOne({ email: profile.email });
+    let user = await User.findOne({ email });
 
-    // If new Google login user, create entry
     if (!user) {
+      // Create new Google user
       user = await User.create({
-        name: profile.name || "No Name",
-        email: profile.email,
-        avatar: profile.picture || "",
-        password: null, // Google users have no password
-        provider: "google",
+        name: name || "No Name",
+        email,
+        avatar: picture || "",
+        googleId,          // <-- added
+        password: null     // <-- keep null since you don't use passwords
       });
+
     } else {
-      // Update avatar/name from Google (optional)
+      // Existing user (from older testing)
       let changed = false;
 
-      if (profile.name && user.name !== profile.name) {
-        user.name = profile.name;
+      if (!user.googleId) {
+        user.googleId = googleId;  // <-- upgrade user to Google auth
         changed = true;
       }
 
-      if (profile.picture && user.avatar !== profile.picture) {
-        user.avatar = profile.picture;
-        changed = true;
+      if (name && user.name !== name) { 
+        user.name = name; 
+        changed = true; 
+      }
+
+      if (picture && user.avatar !== picture) { 
+        user.avatar = picture; 
+        changed = true; 
       }
 
       if (changed) await user.save();
     }
 
-    // Create JWT
     const token = generateToken(user._id);
 
-    res.json({
+    return res.json({
       message: "Google login successful",
       token,
       user: {
@@ -73,30 +82,22 @@ exports.googleAuth = async (req, res) => {
         avatar: user.avatar,
       },
     });
+
   } catch (error) {
-    console.error("GOOGLE LOGIN ERROR:", error?.response?.data || error.message);
-    res.status(500).json({ message: "Google authentication failed" });
+    console.error("GOOGLE AUTH ERROR:", error.message);
+    return res.status(500).json({ message: "Google authentication failed" });
   }
 };
 
 // ===================================================================================
-// GET LOGGED-IN USER (Protected)
+// GET LOGGED-IN USER
 // ===================================================================================
 exports.me = async (req, res) => {
   try {
-    // req.user is set by authMiddleware
     const user = await User.findById(req.user).select("-password");
-
     if (!user) return res.status(404).json({ message: "User not found" });
-
-    res.json({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-    });
+    res.json(user);
   } catch (error) {
-    console.error("ME ERROR:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };

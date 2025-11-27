@@ -16,8 +16,15 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Password will be null for Google accounts
+    // No password since login is Google-only
     password: {
+      type: String,
+      default: null,
+      select: false, // hide it always (clean DB)
+    },
+
+    // Google unique ID
+    googleId: {
       type: String,
       default: null,
     },
