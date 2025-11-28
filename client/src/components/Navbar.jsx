@@ -6,8 +6,6 @@ export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Navbar always visible → removed hide logic
-
   const smoothScroll = (id) => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -41,16 +39,25 @@ export default function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
 
-        {/* LOGO */}
+        {/* LOGO + BRAND */}
         <button
           onClick={goToTop}
-          className="
-            text-xl sm:text-2xl font-bold tracking-tight
-            text-indigo-600 hover:text-indigo-700
-            transition-all duration-200 hover:scale-110
-          "
+          className="flex items-center gap-2 hover:scale-110 transition-all duration-200"
         >
-          Career Nexus
+          <img
+            src="/logo.png"
+            alt="Career Nexus Logo"
+            className="h-8 w-8 object-contain"
+          />
+          <span
+            className="
+              text-xl sm:text-2xl font-bold tracking-tight
+              text-indigo-600 hover:text-indigo-700
+              transition-all duration-200
+            "
+          >
+            Career Nexus
+          </span>
         </button>
 
         {/* NAV OPTIONS */}
