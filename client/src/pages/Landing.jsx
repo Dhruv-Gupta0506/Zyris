@@ -151,14 +151,16 @@ export default function Landing() {
         }
       `}</style>
 
-      {/* HERO */}
+      {/* HERO SECTION - MODIFIED FOR BETTER MOBILE SPACING */}
       <section
         id="hero"
         className="
           min-h-screen
-          flex flex-col items-center justify-center text-center
+          flex flex-col items-center 
+          justify-start sm:justify-center  /* CHANGED: Start on mobile to control height manually */
+          text-center
           px-4 sm:px-6 fade-center reveal pb-8
-          pt-32 sm:pt-0
+          pt-44 sm:pt-0                    /* CHANGED: Push content down specifically 44 units (~176px) */
         "
       >
         <h1
