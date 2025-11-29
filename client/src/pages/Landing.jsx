@@ -155,7 +155,7 @@ export default function Landing() {
       <section
         id="hero"
         className="
-          min-h-[80vh] sm:min-h-screen
+          min-h-screen
           flex flex-col items-center justify-center text-center
           px-4 sm:px-6 fade-center reveal pb-8
           pt-32 sm:pt-0
@@ -228,7 +228,7 @@ export default function Landing() {
       <div id="features" className="scroll-mt-32"></div>
 
       {/* MOBILE Why Choose */}
-      <h2 className="sm:hidden text-3xl text-center font-bold text-[#2b2055] mt-4 mb-4">
+      <h2 className="sm:hidden text-3xl text-center font-bold text-[#2b2055] mt-24 mb-8">
         Why Choose Zyris?
       </h2>
 
