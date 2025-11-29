@@ -13,17 +13,19 @@ function tryParseJson(text) {
 
   try {
     const t = text.trim();
+    // Handle markdown code blocks
+    const cleanText = t.replace(/```json|```/g, "").trim();
 
     // Standard valid JSON
     if (
-      (t.startsWith("{") && t.endsWith("}")) ||
-      (t.startsWith("[") && t.endsWith("]"))
+      (cleanText.startsWith("{") && cleanText.endsWith("}")) ||
+      (cleanText.startsWith("[") && cleanText.endsWith("]"))
     ) {
-      return JSON.parse(t);
+      return JSON.parse(cleanText);
     }
 
     // Extract JSON from within text
-    const matchObj = t.match(/\{[\s\S]*\}/);
+    const matchObj = cleanText.match(/\{[\s\S]*\}/);
     if (matchObj) return JSON.parse(matchObj[0]);
 
     return null;
@@ -54,47 +56,49 @@ function sanitizeSectionArray(arr) {
 // --------------------------------------------------
 function buildPrompt({ resume, job, match }) {
   return `
-You are a FAANG-level recruiter + resume writer. Produce a recruiter-ready, ATS-optimized tailored resume.
+You are an Elite Technical Resume Writer for FAANG (Google, Meta, Amazon). 
+Your goal is to rewrite a candidate's resume to target a specific Job Description (JD).
 
-RETURN ONLY VALID JSON.
+--- CRITICAL RULES (VIOLATIONS = FAILURE) ---
+1. **BAN GENERIC FILLER:** NEVER use phrases like "Showcased skills in...", "Demonstrated ability to...", "Responsible for...", "Worked on...", "Good communication skills".
+2. **HARD SKILLS ONLY:** Every bullet point MUST mention a specific technology, language, or tool (e.g., React, Node.js, AWS, MongoDB).
+3. **METRIC-DRIVEN:** If the resume lacks numbers, INFER realistic engineering metrics based on the scope. 
+   - *Bad:* "Improved performance."
+   - *Good:* "Reduced API latency by ~30% through Redis caching and query optimization."
+4. **NO SOFT SKILLS ALONE:** Do not list "Teamwork" or "Communication" as bullet points. Instead, show it: "Collaborated with 3 backend engineers to integrate RESTful APIs..."
+5. **KEYWORD INJECTION:** Naturally weave in these high-value keywords from the JD: ${job.recommendedKeywords?.join(", ") || "relevant tech stack"}.
 
-SCHEMA:
+--- JSON OUTPUT SCHEMA ---
+Return ONLY raw JSON. No markdown formatting.
+
 {
-  "headline": "One-line resume headline (2–12 words)",
-  "skillsOrdered": ["skill1","skill2","..."],
+  "headline": "A punchy, role-specific headline (e.g., 'Full Stack Engineer | React & Node.js Specialist')",
+  "skillsOrdered": ["Most Critical Skill for JD", "Skill 2", "Skill 3", "...", "Skill N"],
   "experienceSections": [
-    { "title": "Role — Org (if present)", "content": "bullet1\\nbullet2" }
+    { 
+      "title": "Role — Company", 
+      "content": "• [Strong Verb] [What you did] using [Tech Stack], resulting in [Quantifiable Outcome].\n• [Strong Verb] [Another technical achievement]." 
+    }
   ],
   "projectSections": [
-    { "title": "Project Name", "content": "Stack: ...\\nbullet1\\nbullet2" }
+    { 
+      "title": "Project Name", 
+      "content": "Stack: [List main tech]\n• Engineered a [System/App] using [Tech], handling [Scale/Features].\n• Implemented [Complex Feature] which improved [Metric] by ~[Number]%." 
+    }
   ],
   "educationAndExtras": [
-    { "title": "Education / Certifications", "content": "line1\\nline2" }
+    { "title": "Education / Certifications", "content": "Degree, University, Year" }
   ],
-  "scoreBoostSuggestions": ["improvement1","improvement2"],
-  "fullText": "Complete assembled resume in text/markdown"
+  "scoreBoostSuggestions": ["Add a link to...", "Deploy the project to...", "Add unit tests for..."],
+  "fullText": "The complete, formatted text of the resume for copy-pasting."
 }
 
-RULES:
-- Do NOT invent companies, dates, or employment not in ResumeAnalysis.
-- You MAY infer metrics only when implied; prefix estimates with "~".
-- Inject job.recommendedKeywords and job.missingSkills ONLY where truthful.
-- Keep bullets crisp, measurable, technical, recruiter-focused.
-- fullText ORDER: HEADLINE, CONTACT (blank), SUMMARY, SKILLS, EXPERIENCE, PROJECTS, EDUCATION/EXTRAS.
-- NO commentary. NO explanation. ONLY JSON.
+--- INPUT DATA ---
+JOB TITLE: ${job.jobTitle || "Software Engineer"}
+JOB DESCRIPTION SUMMARY: ${(job.jobDescription || "").slice(0, 1500)}
 
-RESUME JSON:
+CANDIDATE RESUME:
 ${JSON.stringify(resume, null, 2)}
-
-JOB JSON:
-${JSON.stringify(job, null, 2)}
-
-MATCH JSON (optional):
-${JSON.stringify(match || {}, null, 2)}
-
-JOB TITLE: ${job.jobTitle || "Not given"}
-JOB DESCRIPTION (truncated):
-${(job.jobDescription || "").slice(0, 1200)}
 `.trim();
 }
 
@@ -119,22 +123,16 @@ exports.generateTailored = async (req, res) => {
     ]);
 
     if (!resume)
-      return res.status(404).json({
-        success: false,
-        message: "Resume analysis not found",
-      });
+      return res.status(404).json({ success: false, message: "Resume analysis not found" });
 
     if (!job)
-      return res.status(404).json({
-        success: false,
-        message: "Job analysis not found",
-      });
+      return res.status(404).json({ success: false, message: "Job analysis not found" });
 
     // Gemini config
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      generationConfig: { temperature: 0.06, maxOutputTokens: 3000 },
+      model: "gemini-2.0-flash", // Use 1.5-flash if 2.0 unavailable
+      generationConfig: { temperature: 0.1, maxOutputTokens: 4000 },
     });
 
     const prompt = buildPrompt({ resume, job, match });

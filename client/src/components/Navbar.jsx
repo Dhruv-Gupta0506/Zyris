@@ -106,9 +106,9 @@ export default function Navbar() {
       <nav
         className="
           w-full fixed top-0 left-0 z-50
-          backdrop-blur-xl bg-white/60
-          border-b border-white/40
-          shadow-[0_4px_20px_rgba(0,0,0,0.03)]
+          backdrop-blur-xl bg-[#f8f9ff]/10
+          border-b border-white/20
+          shadow-[0_4px_30px_rgba(0,0,0,0.03)]
           transition-all duration-300
         "
         style={{ fontFamily: "'Outfit', sans-serif" }} // Applying the font
@@ -134,11 +134,11 @@ export default function Navbar() {
                 "
               />
               
-              {/* ✅ TEXT: Updated Gradient & Font */}
+              {/* ✅ TEXT: UPDATED TO MATCH DASHBOARD THEME EXACTLY */}
               <span
                 className="
                   text-[32px] font-extrabold tracking-tight
-                  bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500
+                  bg-gradient-to-r from-indigo-600 to-purple-600
                   bg-clip-text text-transparent
                   group-hover:brightness-110
                   transition-all duration-300
@@ -153,7 +153,7 @@ export default function Navbar() {
               <span
                 className="
                   text-[32px] font-extrabold tracking-tight
-                  bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500
+                  bg-gradient-to-r from-indigo-600 to-purple-600
                   bg-clip-text text-transparent
                   group-hover:scale-[1.02]
                   transition-transform duration-300

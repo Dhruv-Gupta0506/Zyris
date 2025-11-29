@@ -2,6 +2,30 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Interview = require("../models/Interview");
 const crypto = require("crypto");
 
+// ---- Helper to parse JSON safely ----
+function parseGeminiJson(text) {
+  if (!text) return null;
+  try {
+    const trimmed = text.trim();
+    // Handle markdown code blocks
+    const cleanText = trimmed.replace(/```json|```/g, "").trim();
+    
+    // Raw JSON array
+    if (cleanText.startsWith("[") && cleanText.endsWith("]")) {
+      return JSON.parse(cleanText);
+    }
+    
+    // Extract JSON array block
+    const match = cleanText.match(/\[[\s\S]*\]/);
+    if (match) return JSON.parse(match[0]);
+
+    return null;
+  } catch (err) {
+    console.error("INTERVIEW JSON PARSE ERROR:", err.message);
+    return null;
+  }
+}
+
 // =========================================================
 // ROLE CATEGORY CLASSIFIER
 // =========================================================
@@ -36,7 +60,7 @@ function detectCategory(role) {
 }
 
 // =========================================================
-// GENERATE QUESTIONS (FINAL VERSION)
+// GENERATE QUESTIONS
 // =========================================================
 exports.generateQuestions = async (req, res) => {
   try {
@@ -46,97 +70,54 @@ exports.generateQuestions = async (req, res) => {
 
     const category = detectCategory(role);
     const seed = crypto.randomUUID();
+    const timestamp = Date.now();
 
     const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
       .getGenerativeModel({
         model: "gemini-2.0-flash",
         generationConfig: {
-          temperature: difficulty === "easy" ? 0.45 :
-                      difficulty === "medium" ? 0.65 : 0.85
+          temperature: difficulty === "easy" ? 0.7 : 
+                       difficulty === "medium" ? 0.85 : 1.0 
         }
       });
 
     const prompt = `
-Generate exactly ${questionCount} interview questions.
+    Generate exactly ${questionCount} interview questions for a ${role} position.
+    
+    CONTEXT:
+    - Role: ${role}
+    - Category: ${category}
+    - Difficulty: ${difficulty}
+    - Random Seed: ${seed}-${timestamp}
 
-ROLE: ${role}
-CATEGORY: ${category}
-DIFFICULTY: ${difficulty}
+    QUALITY GUIDELINES:
+    1. PRACTICALITY: Prefer scenario-based or conceptual questions over generic "What is X?".
+    2. CODE SNIPPETS: If asking to debug, refactor, or analyze code, YOU MUST INCLUDE THE CODE SNIPPET in the question text.
+    3. VARIETY: Mix theoretical, practical, and (if applicable) system design questions.
 
-==============================
-GLOBAL RULES
-==============================
-- EXACTLY ${questionCount} questions.
-- Number them 1,2,3...
-- NO answers. NO examples. NO explanation.
-- Strictly role-relevant.
-- No mixing categories.
-- ZERO fluff sentences.
-
-==============================
-CATEGORY RULES
-==============================
-
-FRONTEND:
-- React, JS, state, hooks, rendering, optimization
-- CSS, accessibility, async fetch
-- Light coding only (NO DSA)
-
-BACKEND:
-- APIs, DB schema, authentication, transactions
-- Scalability, caching, queues
-- Implementation-focused coding
-
-FULLSTACK:
-- Mix of frontend + backend REAL tasks
-- API design, component design, DB queries
-
-MOBILE:
-- Lifecycle, local storage, navigation, UI patterns
-
-DATA:
-- SQL, pandas, NumPy, pipelines
-- ONLY data-relevant algorithms
-
-DEVOPS:
-- Docker, Kubernetes, CI/CD, networking
-- NO coding questions
-
-GAME DEV:
-- Game loop, ECS, physics, rendering
-
-SDE:
-- Balanced mix of coding + systems
-- DSA allowed: 
-  EASY → array/string
-  MEDIUM → binary search, intervals, hashing
-  HARD → DP, trees, graphs
-
-GENERIC:
-- General tech questions only
-
-==============================
-CODING QUESTION RULE
-==============================
-If the role category REQUIRES coding AND ${questionCount} ≥ 2:
-- At least ${Math.ceil(questionCount * 0.5)} MUST be coding questions.
-
-==============================
-SEED: ${seed}
-==============================
-
-Return ONLY the numbered questions.
-`;
+    STRICT OUTPUT FORMAT:
+    - Return a raw JSON ARRAY of strings.
+    - Example: ["Question 1 text", "Question 2 text including code snippet:\nfunction x() {...}"]
+    - Do NOT number the questions in the strings.
+    
+    Return ONLY valid JSON.
+    `;
 
     const response = await ai.generateContent([{ text: prompt }]);
     const raw = response.response.text();
+    
+    let questions = parseGeminiJson(raw);
 
-    const questions = raw.split("\n")
-      .map(q => q.trim())
-      .filter(q => q.length > 3)
-      .slice(0, questionCount);
+    if (!questions || !Array.isArray(questions)) {
+      console.warn("Gemini returned non-JSON, falling back to split");
+      questions = raw.split("\n")
+        .map(q => q.replace(/^\d+[\.\)\-]\s*/, "").trim())
+        .filter(q => q.length > 5);
+    }
 
-    return res.json({ success: true, questions });
+    const finalQuestions = questions.slice(0, questionCount);
+
+    return res.json({ success: true, questions: finalQuestions });
 
   } catch (err) {
     console.error("QUESTION GEN ERROR:", err);
@@ -145,7 +126,7 @@ Return ONLY the numbered questions.
 };
 
 // =========================================================
-// EVALUATE ANSWERS (FINAL VERSION)
+// EVALUATE ANSWERS (OPTIMIZED FOR BEST ANALYSIS)
 // =========================================================
 exports.evaluateInterview = async (req, res) => {
   try {
@@ -157,66 +138,56 @@ exports.evaluateInterview = async (req, res) => {
     const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
       .getGenerativeModel({
         model: "gemini-2.0-flash",
-        generationConfig: { temperature: 0.05 }
+        generationConfig: { temperature: 0.15 } // Lower temp for strict grading
       });
 
     const prompt = `
-You are a senior interviewer evaluating a candidate for: ${role}.
+    Act as a "Bar Raiser" / Senior Technical Interviewer at a top-tier tech company (FAANG).
+    Evaluate the candidate's answers for the role: ${role} (${difficulty} level).
 
-==============================
-STRICT FORMAT
-==============================
+    --- INTERVIEW DATA ---
+    QUESTIONS: ${JSON.stringify(questions)}
+    CANDIDATE ANSWERS: ${JSON.stringify(answers)}
 
-Q1 Evaluation:
-Score: XX/100
-Strengths:
-- bullet
-Weaknesses:
-- bullet
-Suggested Improved Answer:
-text only
-Improvement Tip:
-text
+    --- EVALUATION CRITERIA ---
+    1. **Accuracy**: Is the technical solution correct?
+    2. **Efficiency**: Did they use optimal Time/Space complexity (Big O)? (CRITICAL for coding).
+    3. **Clarity**: Is the explanation clear, concise, and structured?
+    4. **Completeness**: Did they handle edge cases and null checks?
 
-(Repeat EXACTLY ${questionCount} times)
+    --- RESPONSE FORMAT (STRICT) ---
+    Follow this template exactly. Do NOT use markdown code blocks (like \`\`\`).
 
-==============================
-FINAL BLOCK
-==============================
+    Q1 Feedback:
+    Score: XX/100
+    Strengths:
+    - [Point 1]
+    Weaknesses:
+    - [Point 1]
+    Suggested Improved Answer:
+    [Provide the ideal 10/10 answer. For coding questions, YOU MUST INCLUDE Time & Space Complexity.]
+    
+    Q2 Feedback:
+    ... (Repeat for all questions) ...
 
-Overall Summary:
-Overall Score: XX/100
-Key Strengths:
-- bullet
-Key Weaknesses:
-- bullet
-Improvement Plan:
-- bullet
-Encouraging Closing Remark:
-one short line
-
-==============================
-RULES
-==============================
-- Do NOT repeat the questions.
-- Do NOT repeat the user answers.
-- NO markdown. NO backticks.
-- Coding answers judged strictly.
-- Theoretical answers must be deep & clear.
-- Be direct and technical. No filler.
-
-QUESTIONS:
-${questions.join("\n")}
-
-ANSWERS:
-${answers.join("\n")}
-`;
+    Overall Summary:
+    Overall Score: XX/100
+    Key Strengths:
+    - [Bullet point]
+    Key Weaknesses:
+    - [Bullet point]
+    Improvement Plan:
+    - [Actionable advice, e.g. "Practice Dynamic Programming", "Read System Design Primer"]
+    Encouraging Closing Remark:
+    [Short, motivating sentence]
+    `;
 
     const response = await ai.generateContent([{ text: prompt }]);
     const evaluationText = response.response.text();
 
     const scoreMatch = evaluationText.match(/Overall Score:\s*(\d{1,3})/i);
-    const score = scoreMatch ? Math.min(Math.max(parseInt(scoreMatch[1]), 0), 100) : 50;
+    let score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
+    score = Math.min(Math.max(score, 0), 100);
 
     const saved = await Interview.create({
       user: req.user,

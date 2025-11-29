@@ -14,7 +14,7 @@ function safeArr(a) {
 }
 
 function clamp(n, min, max) {
-  if (typeof n !== "number" || Number.isNaN(n)) return null;
+  if (typeof n !== "number" || Number.isNaN(n)) return min;
   return Math.max(min, Math.min(max, n));
 }
 
@@ -23,13 +23,14 @@ function parseGeminiJson(text) {
   if (!text || typeof text !== "string") return null;
   try {
     const t = text.trim();
-    if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
-      return JSON.parse(t);
+    // Handle markdown code blocks
+    const cleanText = t.replace(/```json|```/g, "").trim();
+    
+    if ((cleanText.startsWith("{") && cleanText.endsWith("}")) || (cleanText.startsWith("[") && cleanText.endsWith("]"))) {
+      return JSON.parse(cleanText);
     }
-    const objMatch = t.match(/\{[\s\S]*\}/);
+    const objMatch = cleanText.match(/\{[\s\S]*\}/);
     if (objMatch) return JSON.parse(objMatch[0]);
-    const arrMatch = t.match(/\[[\s\S]*\]/);
-    if (arrMatch) return JSON.parse(arrMatch[0]);
     return null;
   } catch (err) {
     console.error("PARSE GEMINI JSON ERROR:", err.message);
@@ -62,28 +63,19 @@ function deterministicFallback(resume, job) {
     (50 * 0.2)
   );
 
-  const hiringProbability = Math.max(0, Math.min(100, overallScore - 5));
-
   return {
-    overallScore,
-    hiringProbability,
+    overallScore: clamp(overallScore, 0, 100),
+    hiringProbability: clamp(overallScore - 10, 0, 100),
     roleCategory: "software-engineer",
     competencies: [],
     strengths: (resume.strengths || []).slice(0, 5),
     weaknesses: (resume.weaknesses || []).slice(0, 5),
     matchingSkills,
     missingSkills: missingImportant,
-    recruiterObjections: ["Not enough evidence of fundamentals or system design."],
+    recruiterObjections: ["Resume lacks specific keywords found in JD.", "Experience depth may not match requirements."],
     recruiterStrengths: (job.strengthsBasedOnJD || []).slice(0, 5),
     scoreBoostEstimate: missingImportant.length > 0 ? "+15 to +25 if key gaps closed." : "+5 to +10 with polish.",
-    verdict:
-      overallScore >= 75
-        ? "Strong Fit"
-        : overallScore >= 60
-        ? "Competitive"
-        : overallScore >= 45
-        ? "Weak Fit"
-        : "Not Suitable",
+    verdict: overallScore >= 75 ? "Strong Fit" : overallScore >= 60 ? "Competitive" : "Weak Fit",
     jobTitle: job.jobTitle || null,
     resumeFileName: resume.fileName || null,
     targetRole: resume.targetRole || null,
@@ -92,7 +84,7 @@ function deterministicFallback(resume, job) {
 }
 
 // ===============================
-// ANALYZE MATCH - FAANG-GRADE
+// ANALYZE MATCH - UPDATED LOGIC
 // ===============================
 exports.analyzeMatch = async (req, res) => {
   try {
@@ -111,36 +103,57 @@ exports.analyzeMatch = async (req, res) => {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      generationConfig: { temperature: 0.12, maxOutputTokens: 2500 },
+      model: "gemini-2.0-flash", // Use 1.5-flash if 2.0 is unavailable
+      generationConfig: { temperature: 0.15, maxOutputTokens: 2500 },
     });
 
     const prompt = `
-You are a FAANG-level hiring analyst...
+    Act as a Lead Technical Recruiter at a FAANG company. 
+    Compare the Candidate Resume against the Job Description (JD) below.
 
-STRICT OUTPUT SCHEMA:
-{
-  "overallScore": number,
-  "hiringProbability": number,
-  "roleCategory": "frontend"|"backend"|"fullstack"|"data"|"ml-ai"|"mobile"|"software-engineer",
-  "competencies": [
-    { "name": "React.js", "resumeLevel": number, "jdLevel": number, "gap": number }
-  ],
-  "strengths": [ "text" ],
-  "weaknesses": [ "text" ],
-  "matchingSkills": [ "text" ],
-  "missingSkills": [ "text" ],
-  "recruiterObjections": [ "text" ],
-  "recruiterStrengths": [ "text" ],
-  "scoreBoostEstimate": "text",
-  "verdict": "Strong Fit" | "Competitive" | "Weak Fit" | "Not Suitable",
-  "jobTitle": "text or null",
-  "resumeFileName": "text or null",
-  "targetRole": "text or null"
-}
+    CRITICAL RULES:
+    1. Scores must be INTEGERS between 0 and 100. (If you calculate 0.85, output 85).
+    2. "hiringProbability": A realistic estimate (0-100) of passing the resume screen.
+    3. "competencies": Select the top 4-5 most critical HARD SKILLS from the JD. Rate Candidate vs JD Requirement (0-10).
+    4. "recruiterObjections": Be harsh but fair.
+    5. SKILL INFERENCE (VERY IMPORTANT): 
+       - If Resume has "Express" or "Node.js", assume "REST API" skill is PRESENT.
+       - If Resume has "React", assume "Frontend" skill is PRESENT.
+       - If Resume has "MongoDB" or "SQL", assume "Database" skill is PRESENT.
+       - Do not list a skill as "Missing" if a clear synonym exists.
 
-Return JSON only.
-`;
+    STRICT JSON OUTPUT SCHEMA:
+    {
+      "overallScore": number, // 0-100
+      "hiringProbability": number, // 0-100
+      "roleCategory": "frontend" | "backend" | "fullstack" | "data" | "mobile" | "software-engineer",
+      "verdict": "Strong Fit" | "Competitive" | "Weak Fit" | "Not Suitable",
+      
+      "competencies": [
+        { "name": "Skill Name", "resumeLevel": number, "jdLevel": number, "gap": number } 
+      ],
+      // resumeLevel & jdLevel are 0-10 integers.
+
+      "strengths": ["text"], 
+      "weaknesses": ["text"], 
+      
+      "matchingSkills": ["text"],
+      "missingSkills": ["text"], 
+      
+      "recruiterObjections": ["text"],
+      "recruiterStrengths": ["text"],
+      
+      "scoreBoostEstimate": "text" 
+    }
+
+    --- JOB DESCRIPTION ---
+    Title: ${job.jobTitle}
+    ${job.jobDescription}
+
+    --- CANDIDATE RESUME ---
+    Target Role: ${resume.targetRole}
+    ${JSON.stringify(resume, null, 2)}
+    `;
 
     const result = await model.generateContent([{ text: prompt }]);
     const rawText = result.response.text();
@@ -152,58 +165,68 @@ Return JSON only.
       safeOutput = deterministicFallback(resume, job);
       safeOutput.rawText = rawText || null;
     } else {
-      const overallScore = clamp(parsed.overallScore, 0, 100);
-      const hiringProbability = clamp(parsed.hiringProbability, 0, 100);
+      // SCALING FIX: Ensure scores are 0-100
+      let overallScore = typeof parsed.overallScore === 'number' ? parsed.overallScore : 0;
+      if (overallScore <= 1 && overallScore > 0) overallScore *= 100; // Fix 0.85 -> 85 issue
+      overallScore = clamp(Math.round(overallScore), 0, 100);
+
+      let hiringProbability = typeof parsed.hiringProbability === 'number' ? parsed.hiringProbability : 0;
+      if (hiringProbability <= 1 && hiringProbability > 0) hiringProbability *= 100;
+      hiringProbability = clamp(Math.round(hiringProbability), 0, 100);
 
       const allowedRoles = ["frontend", "backend", "fullstack", "data", "ml-ai", "mobile", "software-engineer"];
-      const roleCategory = allowedRoles.includes(parsed.roleCategory)
-        ? parsed.roleCategory
-        : "software-engineer";
+      const roleCategory = allowedRoles.includes(parsed.roleCategory) ? parsed.roleCategory : "software-engineer";
 
+      // ---------------------------------------------------------
+      //  FORCE GAP RECALCULATION (Fixes the -1 Gap issue)
+      // ---------------------------------------------------------
       const competencies = Array.isArray(parsed.competencies)
-        ? parsed.competencies.slice(0, 12).map((c) => ({
-            name: String(c.name || "").trim(),
-            resumeLevel: clamp(Number(c.resumeLevel), 0, 10),
-            jdLevel: clamp(Number(c.jdLevel), 0, 10),
-            gap:
-              typeof c.gap === "number"
-                ? clamp(Number(c.gap), -10, 10)
-                : clamp(Number(c.jdLevel) - Number(c.resumeLevel), -10, 10),
-          }))
+        ? parsed.competencies.slice(0, 6).map((c) => {
+            const resumeLevel = clamp(Math.round(Number(c.resumeLevel) || 0), 0, 10);
+            const jdLevel = clamp(Math.round(Number(c.jdLevel) || 0), 0, 10);
+            
+            // MATH FIX: 
+            // Gap = Required (JD) - Actual (Resume).
+            // Example 1: Req 7, Resume 8. Gap = -1. (Negative = Good/Exceeds).
+            // Example 2: Req 7, Resume 5. Gap = 2. (Positive = Bad/Missing).
+            const calculatedGap = jdLevel - resumeLevel;
+            
+            return {
+              name: String(c.name || "Skill").trim(),
+              resumeLevel,
+              jdLevel,
+              gap: calculatedGap 
+            };
+          })
         : [];
 
-      const strengths = safeArr(parsed.strengths).slice(0, 8);
-      const weaknesses = safeArr(parsed.weaknesses).slice(0, 8);
-      const matchingSkills = safeArr(parsed.matchingSkills).slice(0, 40);
-      const missingSkills = safeArr(parsed.missingSkills).slice(0, 40);
-      const recruiterObjections = safeArr(parsed.recruiterObjections).slice(0, 8);
-      const recruiterStrengths = safeArr(parsed.recruiterStrengths).slice(0, 8);
-      const scoreBoostEstimate = parsed.scoreBoostEstimate
-        ? String(parsed.scoreBoostEstimate).slice(0, 200)
-        : null;
+      // Ensure Missing Skills isn't empty if Weaknesses exist
+      let missingSkills = safeArr(parsed.missingSkills).slice(0, 20);
+      const weaknesses = safeArr(parsed.weaknesses).slice(0, 6);
+      if (missingSkills.length === 0 && weaknesses.length > 0 && overallScore < 90) {
+         // Fallback: use weaknesses as missing skills if the AI was lazy
+         missingSkills = weaknesses;
+      }
 
-      const verdict = ["Strong Fit", "Competitive", "Weak Fit", "Not Suitable"].includes(parsed.verdict)
-        ? parsed.verdict
-        : overallScore >= 75
-        ? "Strong Fit"
-        : overallScore >= 60
-        ? "Competitive"
-        : overallScore >= 45
-        ? "Weak Fit"
-        : "Not Suitable";
+      // Ensure Verdict matches Score
+      let verdict = parsed.verdict;
+      if (overallScore >= 80) verdict = "Strong Fit";
+      else if (overallScore >= 60) verdict = "Competitive";
+      else if (overallScore >= 40) verdict = "Weak Fit";
+      else verdict = "Not Suitable";
 
       safeOutput = {
         overallScore,
         hiringProbability,
         roleCategory,
         competencies,
-        strengths,
+        strengths: safeArr(parsed.strengths).slice(0, 6),
         weaknesses,
-        matchingSkills,
+        matchingSkills: safeArr(parsed.matchingSkills).slice(0, 20),
         missingSkills,
-        recruiterObjections,
-        recruiterStrengths,
-        scoreBoostEstimate,
+        recruiterObjections: safeArr(parsed.recruiterObjections).slice(0, 5),
+        recruiterStrengths: safeArr(parsed.recruiterStrengths).slice(0, 5),
+        scoreBoostEstimate: parsed.scoreBoostEstimate ? String(parsed.scoreBoostEstimate).slice(0, 250) : "Review missing skills.",
         verdict,
         jobTitle: parsed.jobTitle || job.jobTitle || null,
         resumeFileName: parsed.resumeFileName || resume.fileName || null,
@@ -237,7 +260,7 @@ Return JSON only.
 };
 
 // ===============================
-// MATCH ANALYSIS HISTORY (NEW)
+// MATCH ANALYSIS HISTORY
 // ===============================
 exports.matchHistory = async (req, res) => {
   try {
