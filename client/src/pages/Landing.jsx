@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -6,13 +6,12 @@ import { useAuth } from "../context/AuthContext";
 export default function Landing() {
   const navigate = useNavigate();
   const { login, token, loading } = useAuth();
+  const cursorGlowRef = useRef(null);
 
-  // Auto-redirect if logged in
+  // Auto redirect
   useEffect(() => {
-    if (!loading && token) {
-      navigate("/dashboard");
-    }
-  }, [loading, token]);
+    if (!loading && token) navigate("/dashboard");
+  }, [loading, token, navigate]);
 
   // Reveal animations
   useEffect(() => {
@@ -28,15 +27,30 @@ export default function Landing() {
     elements.forEach((el) => observer.observe(el));
   }, []);
 
-  // Google Login Init
+  // ============================
+  // GOOGLE LOGIN SETUP
+  // ============================
   useEffect(() => {
+    if (!window.google) return;
+
     google.accounts.id.initialize({
       client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
       callback: handleGoogleResponse,
+      auto_select: false, // Prevents auto-popup if desired
     });
-  }, []);
 
-  const loginWithGoogle = () => google.accounts.id.prompt();
+    // Render REAL Google button (invisible overlay)
+    google.accounts.id.renderButton(
+      document.getElementById("googleBtn"),
+      {
+        theme: "filled_blue",
+        size: "large",
+        width: 350, // Wide enough to cover the custom button
+        type: "standard",
+        shape: "rectangular",
+      }
+    );
+  }, []);
 
   const handleGoogleResponse = async (response) => {
     try {
@@ -47,42 +61,64 @@ export default function Landing() {
 
       login(data.token);
       navigate("/dashboard");
-    } catch (error) {
-      console.error("Google Login Error:", error);
+    } catch (err) {
+      console.error("Google login failed:", err);
     }
   };
 
+  // Mouse glow effect
+  useEffect(() => {
+    const glow = cursorGlowRef.current;
+    if (!glow) return;
+    if (window.innerWidth < 768) return;
+
+    let x = 0, y = 0;
+    let targetX = 0, targetY = 0;
+
+    const move = (e) => {
+      targetX = e.clientX;
+      targetY = e.clientY;
+    };
+
+    const animate = () => {
+      x += (targetX - x) * 0.08;
+      y += (targetY - y) * 0.08;
+      glow.style.transform = `translate(${x - 200}px, ${y - 200}px)`;
+      requestAnimationFrame(animate);
+    };
+
+    window.addEventListener("mousemove", move);
+    animate();
+    return () => window.removeEventListener("mousemove", move);
+  }, []);
+
   return (
     <div className="relative w-full min-h-screen text-[#111827] overflow-hidden">
+      
+      {/* Background Elements */}
+      <div
+        ref={cursorGlowRef}
+        className="pointer-events-none fixed top-0 left-0 w-[400px] h-[400px] rounded-full -z-20"
+        style={{
+          background: "radial-gradient(circle, rgba(40,0,80,0.25), rgba(0,0,0,0) 70%)",
+          filter: "blur(90px)",
+        }}
+      ></div>
 
-      {/* PREMIUM BACKGROUND */}
-      <div className="
-        absolute inset-0 -z-10 
-        bg-gradient-to-br from-[#f7f8ff] via-[#eef0ff] to-[#e7e9ff]
-      "></div>
+      <div className="absolute inset-0 -z-30 bg-gradient-to-br from-[#f7f8ff] via-[#eef0ff] to-[#e7e9ff]" />
 
-      {/* GLOW SPOTLIGHT */}
-      <div className="
-        absolute top-[-200px] left-1/2 -translate-x-1/2 
-        w-[900px] h-[900px]
-        bg-[radial-gradient(circle,rgba(150,115,255,0.18),transparent_70%)]
-        blur-[120px] -z-10
-      "></div>
+      <div className="absolute top-[-200px] left-1/2 -translate-x-1/2 w-[900px] h-[900px] bg-[radial-gradient(circle,rgba(150,115,255,0.18),transparent_70%)] blur-[120px] -z-20"></div>
 
-      {/* SOFT FADE AT BOTTOM OF HERO (HIDES NEXT SECTION PREVIEW) */}
-      <div className="
-        absolute bottom-0 left-0 w-full h-28 
-        bg-gradient-to-b from-transparent to-[#f7f8ff]
-        pointer-events-none
-        z-10
-      "></div>
+      <div className="absolute bottom-0 left-0 w-full h-28 bg-gradient-to-b from-transparent to-[#f7f8ff] pointer-events-none z-10"></div>
 
-      {/* ANIMATIONS */}
       <style>{`
         .fade-left { opacity: 0; transform: translateX(-60px); transition: 0.8s ease-out; }
         .fade-right { opacity: 0; transform: translateX(60px); transition: 0.8s ease-out; }
         .fade-center { opacity: 0; transform: translateY(40px); transition: 0.8s ease-out; }
         .active { opacity: 1 !important; transform: translate(0,0) !important; }
+        
+        /* Fix for invisible Google button iframe */
+        #googleBtn iframe { margin: 0 !important; display: block !important; } 
 
         .premium-img-wrapper::before {
           content: "";
@@ -94,22 +130,20 @@ export default function Landing() {
         }
       `}</style>
 
-      {/* HERO SECTION */}
+      {/* HERO */}
       <section
         id="hero"
         className="
-          min-h-screen
+          min-h-[80vh] sm:min-h-screen
           flex flex-col items-center justify-center text-center
-          px-4 sm:px-6 fade-center reveal pb-24
+          px-4 sm:px-6 fade-center reveal pb-8
         "
       >
-
-        {/* HERO TITLE */}
         <h1
           className="
+            hidden sm:block
             text-[55px] sm:text-[70px] md:text-[85px] lg:text-[95px]
-            font-extrabold leading-[1.05] tracking-tight 
-            max-w-5xl
+            font-extrabold leading-[1.05] tracking-tight max-w-5xl
           "
         >
           Career Made <br />
@@ -118,33 +152,74 @@ export default function Landing() {
           </span>
         </h1>
 
-        {/* TAGLINE */}
-        <p className="mt-6 text-[18px] sm:text-[20px] md:text-[22px] lg:text-[24px] text-gray-600 max-w-2xl leading-relaxed">
+        <h1
+          className="
+            sm:hidden block
+            text-[80px] font-extrabold leading-[1.1] tracking-tight
+          "
+        >
+          Career<br />Made<br />
+          <span className="bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-transparent bg-clip-text drop-shadow-md">
+            Simple
+          </span>
+        </h1>
+
+        <p className="mt-6 text-[36px] sm:text-[20px] md:text-[22px] lg:text-[24px] text-gray-600 max-w-2xl leading-relaxed">
           Smarter Career Decisions, Powered by AI.
         </p>
 
+        {/* ========================================================= */}
+        {/* NEW BUTTON WRAPPER - The Secret to making it work */}
+        {/* ========================================================= */}
+        <div className="relative mt-10 inline-block group">
+          
+          {/* VISUAL BUTTON (User sees this) */}
+          <button
+            className="
+              pointer-events-none
+              px-8 sm:px-10 py-3.5
+              bg-gradient-to-r from-fuchsia-500 to-indigo-600
+              text-white rounded-lg 
+              text-base sm:text-lg font-semibold
+              shadow-[0_4px_25px_rgba(120,50,255,0.25)]
+              
+              /* 'group-hover' ensures the animation plays when hovering the overlay */
+              group-hover:shadow-[0_6px_30px_rgba(120,50,255,0.35)]
+              group-hover:scale-[1.045]
+              transition-all duration-300
+            "
+          >
+            Try Zyris
+          </button>
 
-        {/* CTA BUTTON */}
-        <button
-          onClick={loginWithGoogle}
-          className="
-            mt-10 px-8 sm:px-10 py-3.5
-            bg-gradient-to-r from-fuchsia-500 to-indigo-600
-            text-white rounded-lg 
-            text-base sm:text-lg font-semibold
-            shadow-[0_4px_25px_rgba(120,50,255,0.25)]
-            hover:shadow-[0_6px_30px_rgba(120,50,255,0.35)]
-            hover:scale-[1.045]
-            transition-all duration-300
-          "
-        >
-          Try Zyris
-        </button>
+          {/* REAL GOOGLE BUTTON (Invisible Overlay) */}
+          <div 
+            id="googleBtn"
+            className="absolute inset-0 z-10 opacity-0 overflow-hidden flex justify-center items-center cursor-pointer"
+          ></div>
+
+        </div>
+
       </section>
+      <div id="features" className="scroll-mt-32"></div>
+      {/* MOBILE Why Choose */}
+      <h2 className="sm:hidden text-3xl text-center font-bold text-[#2b2055] mt-4 mb-4">
+        Why Choose Zyris?
+      </h2>
 
-      {/* FEATURES */}
-      <div id="features"></div>
+      {/* DESKTOP Why Choose */}
+      <h2
+        className="
+          hidden sm:block 
+          text-4xl md:text-5xl font-bold text-center mt-10 mb-10 
+          text-[#34245f]
+          fade-center reveal
+        "
+      >
+        Why Choose Zyris?
+      </h2>
 
+      {/* FEATURE COMPONENTS */}
       <PremiumSection
         title="Smarter Resume Insights"
         subtitle="📄 AI Resume Analyzer"
@@ -190,18 +265,15 @@ export default function Landing() {
         desc="Your reports, interviews, and resumes saved automatically."
       />
 
-      {/* FAQ */}
       <section id="faq" className="px-4 sm:px-6 py-20 sm:py-28 fade-center reveal">
         <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-12 sm:mb-16">
           FAQ
         </h2>
-
         <FAQ q="Is this really free?" a="Yes — fully free for students and educational use." />
         <FAQ q="Do I need technical knowledge?" a="No. Just upload your resume or paste a JD." />
         <FAQ q="Is my data safe & private?" a="Absolutely — your data remains private and secure." />
       </section>
 
-      {/* FOOTER */}
       <footer className="py-10 sm:py-12 text-center text-gray-700 text-base sm:text-lg">
         Built with ❤️ for Students • Powered by MERN + AI
       </footer>
@@ -209,13 +281,11 @@ export default function Landing() {
   );
 }
 
-
 /* FEATURE SECTION */
 function PremiumSection({ title, subtitle, desc, img, reverse }) {
   return (
     <section className="px-4 sm:px-6 py-20 sm:py-24">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 sm:gap-24 items-center">
-
         <div className={`${reverse ? "lg:order-2 fade-right" : "lg:order-1 fade-left"} reveal`}>
           <h3 className="text-fuchsia-600 text-lg sm:text-xl md:text-2xl font-semibold mb-2 sm:mb-4">
             {subtitle}
@@ -243,14 +313,12 @@ function PremiumSection({ title, subtitle, desc, img, reverse }) {
             className="w-full h-full object-cover transition-all duration-500"
           />
         </div>
-
       </div>
     </section>
   );
 }
 
-
-/* FAQ COMPONENT */
+/* FAQ */
 function FAQ({ q, a }) {
   return (
     <details

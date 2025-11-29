@@ -11,10 +11,13 @@ export default function Navbar() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [user, setUser] = useState(null);
+  
+  // State to handle broken image links (fallback to initials)
+  const [imgError, setImgError] = useState(false);
 
   const menuRef = useRef(null);
 
-  // Fetch user
+  // Fetch user data
   useEffect(() => {
     if (!token) return setUser(null);
 
@@ -28,15 +31,24 @@ export default function Navbar() {
         }
         return res.json();
       })
-      .then((data) => data && setUser(data))
+      .then((data) => {
+        if (data) {
+          setUser(data);
+          setImgError(false); // Reset error state on new user fetch
+        }
+      })
       .catch((err) => console.error("NAVBAR USER ERROR:", err));
   }, [token]);
 
-  const avatar =
-    user?.avatar ||
-    `https://ui-avatars.com/api/?name=${user?.name || "U"}&background=6366f1&color=fff&rounded=true&size=128`;
+  // Determine which avatar to show
+  // If user has an avatar AND there is no error loading it, use it.
+  // Otherwise, use the UI Avatars generator.
+  const avatarSrc =
+    !imgError && user?.avatar
+      ? user.avatar
+      : `https://ui-avatars.com/api/?name=${user?.name || "User"}&background=6366f1&color=fff&rounded=true&size=128`;
 
-  // Close dropdown
+  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -47,40 +59,42 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Smooth scroll
+  // Smooth scroll helper
   const smoothScrollTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // FIX: Proper Zyris click behaviour
+  const smoothScroll = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      console.warn(`Element with id="${id}" not found on this page.`);
+    }
+  };
+
+  // Logic for Logo click
   const goToTop = () => {
     if (!token) {
-      // Landing page only scrolls
       smoothScrollTop();
       return;
     }
-
     if (location.pathname === "/dashboard") {
       smoothScrollTop();
       return;
     }
-
-    // Any other route → go dashboard + scroll
     navigate("/dashboard");
     setTimeout(() => smoothScrollTop(), 250);
   };
 
-  const smoothScroll = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const handleNavClick = (section) => {
+  // Logic for Features/FAQ click
+  const handleNavClick = (sectionId) => {
     if (location.pathname !== "/") {
       navigate("/");
-      setTimeout(() => smoothScroll(section), 200);
+      // Wait slightly longer for Landing page to mount before scrolling
+      setTimeout(() => smoothScroll(sectionId), 400); 
     } else {
-      smoothScroll(section);
+      smoothScroll(sectionId);
     }
   };
 
@@ -103,7 +117,7 @@ export default function Navbar() {
       >
         <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
 
-          {/* LEFT SIDE */}
+          {/* LEFT SIDE: LOGO */}
           {!token ? (
             // LOGGED OUT (Landing)
             <button
@@ -126,8 +140,9 @@ export default function Navbar() {
               </span>
             </button>
           ) : (
-            // LOGGED IN (Dashboard + tools)
-            <button onClick={goToTop} className="flex items-center group">
+            // LOGGED IN (Dashboard)
+            <button onClick={goToTop} className="flex items-center gap-2 group">
+               {/* Optional: Add small logo here too if you want */}
               <span
                 className="
                   text-[28px] font-extrabold tracking-tight
@@ -160,13 +175,16 @@ export default function Navbar() {
           ) : (
             <div className="relative" ref={menuRef}>
               <img
-                src={avatar}
+                src={avatarSrc}
                 alt="avatar"
+                referrerPolicy="no-referrer" // ✅ FIXED: Allows Google images on localhost
+                onError={() => setImgError(true)} // ✅ FIXED: Fallback if image fails
                 onClick={() => setShowMenu(!showMenu)}
                 className="
                   h-11 w-11 rounded-full cursor-pointer
                   border border-gray-300 object-cover
                   hover:scale-[1.05] transition
+                  bg-white
                 "
               />
 
@@ -221,15 +239,17 @@ export default function Navbar() {
           >
             <button
               onClick={() => setShowProfileModal(false)}
-              className="absolute top-4 right-4 text-xl"
+              className="absolute top-4 right-4 text-xl text-gray-500 hover:text-gray-800"
             >
               ✕
             </button>
 
             <img
-              src={avatar}
-              className="h-24 w-24 rounded-full mx-auto mb-4 shadow-md"
-              alt=""
+              src={avatarSrc}
+              referrerPolicy="no-referrer"
+              onError={() => setImgError(true)}
+              className="h-24 w-24 rounded-full mx-auto mb-4 shadow-md object-cover bg-gray-100"
+              alt="Profile"
             />
 
             <h2 className="text-2xl font-bold text-gray-800">{user.name}</h2>
@@ -259,17 +279,17 @@ export default function Navbar() {
               Are you sure you want to log out?
             </p>
 
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-4">
               <button
                 onClick={() => setShowLogoutModal(false)}
-                className="px-6 py-2 rounded-xl border border-gray-400"
+                className="flex-1 px-6 py-2 rounded-xl border border-gray-400 hover:bg-gray-50"
               >
                 Cancel
               </button>
 
               <button
                 onClick={confirmLogout}
-                className="px-6 py-2 rounded-xl bg-red-500 text-white"
+                className="flex-1 px-6 py-2 rounded-xl bg-red-500 text-white hover:bg-red-600"
               >
                 Logout
               </button>
