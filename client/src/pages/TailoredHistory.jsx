@@ -1,4 +1,3 @@
-// frontend/pages/TailoredHistory.jsx
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -103,18 +102,46 @@ export default function TailoredHistory() {
     }
   };
 
-  const downloadTxt = (record) => {
-    if (!record.fullText) return alert("No content to download.");
-    const blob = new Blob([record.fullText], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const name = `${record.resumeFileName || "tailored-resume"}-${new Date(record.createdAt).toISOString().slice(0,10)}.txt`;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  // --- SAVE AS PDF FUNCTIONALITY ---
+  const handleSaveToPdf = (record) => {
+    if (!record.fullText) return alert("No content to save.");
+    
+    // Open a new window for printing
+    const printWindow = window.open('', '', 'width=850,height=1100');
+    if (!printWindow) return alert("Please allow popups to save as PDF.");
+
+    // Simple HTML structure for the PDF view
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Resume - ${record.resumeFileName || "Tailored"}</title>
+          <style>
+            body { 
+              font-family: 'Calibri', 'Arial', sans-serif; 
+              line-height: 1.5; 
+              color: #000; 
+              padding: 40px; 
+              font-size: 11pt;
+              white-space: pre-wrap; /* Preserves newlines from the AI output */
+            }
+            @media print {
+              body { padding: 0; margin: 0.5in; }
+            }
+          </style>
+        </head>
+        <body>${record.fullText}</body>
+      </html>
+    `;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Trigger the print dialog (User selects "Save as PDF")
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
   };
 
   // --- HELPERS ---
@@ -342,10 +369,10 @@ export default function TailoredHistory() {
                                        <Copy className="w-4 h-4" /> Copy
                                     </button>
                                     <button 
-                                       onClick={() => downloadTxt(record)}
+                                       onClick={() => handleSaveToPdf(record)}
                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
                                     >
-                                       <Download className="w-4 h-4" /> Download .txt
+                                       <Download className="w-4 h-4" /> Save as PDF
                                     </button>
                                  </div>
                               </div>

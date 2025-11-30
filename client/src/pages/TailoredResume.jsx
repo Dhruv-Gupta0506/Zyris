@@ -1,4 +1,3 @@
-// frontend/pages/TailoredResume.jsx
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -15,7 +14,8 @@ import {
   Lightbulb,
   Sparkles,
   Copy,
-  Check // Added Check icon for completed state
+  Check,
+  RefreshCw 
 } from "lucide-react";
 
 // Define API_URL directly to avoid import errors
@@ -35,6 +35,9 @@ export default function TailoredResume() {
 
   const [loading, setLoading] = useState(false);
   const [tailored, setTailored] = useState(null);
+  
+  // Track parameters used for the current analysis to detect changes
+  const [generatedParams, setGeneratedParams] = useState(null);
 
   const navigate = useNavigate();
   const resultsRef = useRef(null);
@@ -63,6 +66,13 @@ export default function TailoredResume() {
       }, 100);
     }
   }, [tailored]);
+
+  // --- DIRTY INPUT CHECK ---
+  // Returns true if the current selections differ from what was last generated
+  const isInputDirty = generatedParams && (
+    generatedParams.resumeId !== selectedResume?._id ||
+    generatedParams.jobId !== selectedJob?._id
+  );
 
   // Fetch history on mount
   useEffect(() => {
@@ -98,6 +108,12 @@ export default function TailoredResume() {
       );
       
       setTailored(res.data.tailored);
+      // Lock current params as "generated"
+      setGeneratedParams({
+        resumeId: selectedResume._id,
+        jobId: selectedJob._id
+      });
+
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.message || "Generation failed.");
@@ -106,18 +122,46 @@ export default function TailoredResume() {
     }
   };
 
-  const downloadTxt = () => {
-    if (!tailored?.fullText) return alert("No content to download.");
-    const blob = new Blob([tailored.fullText], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const name = `${tailored.resumeFileName || "tailored-resume"}-${new Date(tailored.createdAt || Date.now()).toISOString().slice(0,10)}.txt`;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  // --- SAVE AS PDF FUNCTIONALITY ---
+  const handleSaveToPdf = () => {
+    if (!tailored?.fullText) return alert("No content to save.");
+    
+    // Open a new window for printing
+    const printWindow = window.open('', '', 'width=850,height=1100');
+    if (!printWindow) return alert("Please allow popups to save as PDF.");
+
+    // Simple HTML structure for the PDF view
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Resume - ${tailored.resumeFileName || "Tailored"}</title>
+          <style>
+            body { 
+              font-family: 'Calibri', 'Arial', sans-serif; 
+              line-height: 1.5; 
+              color: #000; 
+              padding: 40px; 
+              font-size: 11pt;
+              white-space: pre-wrap; /* Preserves newlines from the AI output */
+            }
+            @media print {
+              body { padding: 0; margin: 0.5in; }
+            }
+          </style>
+        </head>
+        <body>${tailored.fullText}</body>
+      </html>
+    `;
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Trigger the print dialog (User selects "Save as PDF")
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
   };
 
   const copyToClipboard = () => {
@@ -261,16 +305,16 @@ export default function TailoredResume() {
               )}
             </div>
 
-            {/* Submit Button (Completed State Added) */}
+            {/* Submit Button (Updated for Re-Generate Logic) */}
             <button
               type="submit"
-              disabled={loading || tailored}
+              disabled={loading || (tailored && !isInputDirty)}
               className={`
                 w-full py-4 rounded-xl font-bold text-lg shadow-[0_4px_20px_rgba(120,50,255,0.2)] transition-all duration-300 flex items-center justify-center gap-2
                 ${loading 
                   ? "bg-gray-400 cursor-not-allowed opacity-70" 
-                  : tailored
-                    ? "bg-gray-100 text-gray-400 border-2 border-gray-200 cursor-not-allowed shadow-none" // Completed State
+                  : (tailored && !isInputDirty)
+                    ? "bg-gray-100 text-gray-400 border-2 border-gray-200 cursor-not-allowed shadow-none" 
                     : "bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-white hover:scale-[1.01] hover:shadow-[0_6px_30px_rgba(120,50,255,0.3)]"
                 }
               `}
@@ -279,9 +323,13 @@ export default function TailoredResume() {
                 <>
                   <Loader2 className="animate-spin w-6 h-6" /> Generating...
                 </>
+              ) : (tailored && !isInputDirty) ? (
+                <>
+                  <Check className="w-6 h-6" /> Generation Complete
+                </>
               ) : tailored ? (
                 <>
-                  <Check className="w-6 h-6" /> Analysis Complete
+                  <RefreshCw className="w-5 h-5" /> Regenerate Resume
                 </>
               ) : (
                 <>
@@ -406,13 +454,13 @@ export default function TailoredResume() {
                         onClick={copyToClipboard}
                         className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium text-sm transition-colors flex items-center gap-2"
                       >
-                         <Copy className="w-4 h-4" /> Copy
+                          <Copy className="w-4 h-4" /> Copy
                       </button>
                       <button 
-                        onClick={downloadTxt}
+                        onClick={handleSaveToPdf}
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
                       >
-                         <Download className="w-4 h-4" /> Download .txt
+                          <Download className="w-4 h-4" /> Save as PDF
                       </button>
                   </div>
                </div>

@@ -1,4 +1,3 @@
-// frontend/components/ResumeAnalyzer.jsx
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -11,11 +10,12 @@ import {
   Award, 
   Target, 
   Briefcase, 
-  Loader2,
-  ChevronRight,
-  BarChart3,
-  ArrowLeft,
-  Check // Added Check icon
+  Loader2, 
+  ChevronRight, 
+  BarChart3, 
+  ArrowLeft, 
+  Check,
+  RefreshCw // Added Refresh icon
 } from "lucide-react";
 
 export default function ResumeAnalyzer() {
@@ -24,20 +24,31 @@ export default function ResumeAnalyzer() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   
+  // Track parameters used for the current analysis to detect changes
+  const [analyzedParams, setAnalyzedParams] = useState(null);
+
   const navigate = useNavigate();
   const resultsRef = useRef(null);
 
   // --- AUTO SCROLL EFFECT ---
   useEffect(() => {
     if (analysis && resultsRef.current) {
-      // Small timeout ensures DOM is fully rendered before scrolling
       setTimeout(() => {
         resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
     }
   }, [analysis]);
 
-  // --- LOGIC (UNCHANGED) ---
+  // --- DIRTY INPUT CHECK ---
+  // Returns true if the current inputs differ from what was last analyzed
+  const isInputDirty = analyzedParams && (
+    analyzedParams.targetRole !== targetRole ||
+    !file || // If file is removed, strictly distinct from analyzed state
+    analyzedParams.fileName !== file.name || 
+    analyzedParams.fileLastModified !== file.lastModified
+  );
+
+  // --- LOGIC ---
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
 
@@ -94,6 +105,13 @@ export default function ResumeAnalyzer() {
       });
 
       setAnalysis(res.data.analysis);
+      // Lock current params as "analyzed"
+      setAnalyzedParams({
+        targetRole: targetRole,
+        fileName: file.name,
+        fileLastModified: file.lastModified
+      });
+
     } catch (err) {
       console.error(err);
       const message = err.response?.data?.message || "Failed to analyze resume.";
@@ -111,16 +129,11 @@ export default function ResumeAnalyzer() {
     <div className="relative w-full min-h-screen text-[#111827] overflow-hidden pt-36 pb-20 px-4 sm:px-6">
       
       {/* ========================================================= */}
-      {/* 1. BACKGROUND THEME (MATCHING LANDING.JSX) */}
+      {/* 1. BACKGROUND THEME */}
       {/* ========================================================= */}
       <div className="fixed inset-0 -z-30 bg-gradient-to-br from-[#f7f8ff] via-[#eef0ff] to-[#e7e9ff]" />
-      
-      {/* Top Purple/Indigo Glow */}
       <div className="fixed top-[-200px] left-1/2 -translate-x-1/2 w-[900px] h-[900px] bg-[radial-gradient(circle,rgba(150,115,255,0.15),transparent_70%)] blur-[120px] -z-20 pointer-events-none"></div>
-      
-      {/* Bottom Light Glow */}
       <div className="fixed bottom-0 left-0 w-full h-28 bg-gradient-to-b from-transparent to-[#f7f8ff] pointer-events-none z-10"></div>
-
 
       <div className="max-w-5xl mx-auto relative z-20">
         
@@ -198,16 +211,17 @@ export default function ResumeAnalyzer() {
               </div>
             </div>
 
-            {/* 3. SUBMIT BUTTON (UPDATED FOR 'COMPLETED' STATE) */}
+            {/* 3. SUBMIT BUTTON */}
+            {/* Logic: Disabled if loading OR if results exist AND inputs are unchanged */}
             <button
               type="submit"
-              disabled={loading || analysis}
+              disabled={loading || (analysis && !isInputDirty)}
               className={`
                 w-full py-4 rounded-xl font-bold text-lg shadow-[0_4px_20px_rgba(120,50,255,0.2)] transition-all duration-300 flex items-center justify-center gap-2
                 ${loading 
                   ? "bg-gray-400 cursor-not-allowed opacity-70" 
-                  : analysis
-                    ? "bg-gray-100 text-gray-400 border-2 border-gray-200 cursor-not-allowed shadow-none" // Completed State
+                  : (analysis && !isInputDirty)
+                    ? "bg-gray-100 text-gray-400 border-2 border-gray-200 cursor-not-allowed shadow-none" 
                     : "bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-white hover:scale-[1.01] hover:shadow-[0_6px_30px_rgba(120,50,255,0.3)]"
                 }
               `}
@@ -216,9 +230,13 @@ export default function ResumeAnalyzer() {
                 <>
                   <Loader2 className="animate-spin w-6 h-6" /> Analyzing...
                 </>
-              ) : analysis ? (
+              ) : (analysis && !isInputDirty) ? (
                 <>
                   <Check className="w-6 h-6" /> Analysis Complete
+                </>
+              ) : analysis ? ( // analysis exists but inputs are dirty -> Show Re-analyze
+                <>
+                  <RefreshCw className="w-5 h-5" /> Re-Analyze Resume
                 </>
               ) : (
                 "Analyze Resume"
@@ -227,7 +245,7 @@ export default function ResumeAnalyzer() {
           </form>
         </div>
 
-        {/* RESULTS SECTION (with ref for scrolling) */}
+        {/* RESULTS SECTION */}
         {analysis && (
           <div ref={resultsRef} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700 scroll-mt-32">
             
@@ -247,7 +265,6 @@ export default function ResumeAnalyzer() {
                 <div className="relative z-10 w-16 h-16 rounded-full bg-fuchsia-50 flex items-center justify-center text-fuchsia-600 shadow-inner">
                   <Award className="w-8 h-8" />
                 </div>
-                {/* Background decorative blob - Color matches score */}
                 <div className={`absolute right-0 top-0 w-40 h-40 rounded-full blur-[60px] opacity-20 -mr-10 -mt-10 pointer-events-none ${safeNum(analysis.atsScore) >= 70 ? "bg-emerald-400" : "bg-rose-400"}`}></div>
               </div>
 
@@ -310,7 +327,6 @@ export default function ResumeAnalyzer() {
 
             {/* STRENGTHS & WEAKNESSES GRID */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Strengths */}
               <div className="bg-white/80 backdrop-blur-md p-8 rounded-[2rem] shadow-sm border border-emerald-100/50 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
                 <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2 relative z-10">
@@ -327,7 +343,6 @@ export default function ResumeAnalyzer() {
                 </ul>
               </div>
 
-              {/* Weaknesses */}
               <div className="bg-white/80 backdrop-blur-md p-8 rounded-[2rem] shadow-sm border border-rose-100/50 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-rose-400/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
                 <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2 relative z-10">
@@ -376,7 +391,7 @@ export default function ResumeAnalyzer() {
                </div>
             </div>
 
-            {/* DETAILED ADVICE SECTIONS */}
+            {/* DETAILED ADVICE */}
             <div className="bg-white/80 backdrop-blur-md p-8 rounded-[2rem] shadow-sm border border-white/60 space-y-12">
               
               {/* Recruiter Impression */}
@@ -404,24 +419,24 @@ export default function ResumeAnalyzer() {
 
               {/* Rewrites Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                 <div className="bg-fuchsia-50/50 p-6 rounded-2xl border border-fuchsia-100">
+                  <div className="bg-fuchsia-50/50 p-6 rounded-2xl border border-fuchsia-100">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Summary Rewrite</h3>
                     <div className="text-gray-700 text-sm leading-relaxed">
                        {analysis.summaryRewrite ?? "N/A"}
                     </div>
-                 </div>
-                 
-                 <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                  </div>
+                  
+                  <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Bullet Point Enhancements</h3>
-                     <ul className="space-y-3">
+                      <ul className="space-y-3">
                         {safeArr(analysis.bulletRewrites).slice(0, 3).map((item, i) => (
                            <li key={i} className="flex gap-3 text-sm text-gray-700">
                               <ChevronRight className="w-5 h-5 text-indigo-500 flex-shrink-0" />
                               <span className="leading-relaxed">{item}</span>
                            </li>
                         ))}
-                     </ul>
-                 </div>
+                      </ul>
+                  </div>
               </div>
             </div>
 

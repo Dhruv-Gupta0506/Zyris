@@ -16,7 +16,8 @@ import {
   AlertTriangle,
   ChevronRight,
   ArrowUpDown,
-  Filter
+  Filter,
+  Target // <--- ADDED THIS MISSING IMPORT
 } from "lucide-react";
 
 // Define API_URL directly if not imported from a config
@@ -261,11 +262,12 @@ export default function ResumeHistory() {
                            </div>
 
                            {/* 2. SCORING BREAKDOWN */}
-                           {record.scoringBreakdown && (
+                           {/* Added "|| {}" to safely handle potential nulls */}
+                           {(record.scoringBreakdown || Object.keys(record.scoringBreakdown || {}).length > 0) && (
                               <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 mb-8">
                                  <h4 className="text-lg font-bold text-gray-900 mb-4">Detailed Breakdown</h4>
                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                    {Object.entries(record.scoringBreakdown).map(([key, value]) => {
+                                    {Object.entries(record.scoringBreakdown || {}).map(([key, value]) => {
                                        const sVal = safeNum(value);
                                        const is100 = sVal > 10;
                                        const max = is100 ? 100 : 10;

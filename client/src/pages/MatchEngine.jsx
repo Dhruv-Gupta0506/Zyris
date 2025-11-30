@@ -1,5 +1,3 @@
-// frontend/components/MatchEngine.jsx
-
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -18,7 +16,8 @@ import {
   XCircle,
   ChevronDown,
   Plus,
-  Check // Added Check icon
+  Check,
+  RefreshCw // Added Refresh icon
 } from "lucide-react";
 
 // Define API_URL directly to avoid import errors
@@ -38,6 +37,9 @@ export default function MatchEngine() {
 
   const [loading, setLoading] = useState(false);
   const [matchResult, setMatchResult] = useState(null);
+  
+  // Track parameters used for the current analysis to detect changes
+  const [analyzedParams, setAnalyzedParams] = useState(null);
 
   const navigate = useNavigate();
   const resultsRef = useRef(null);
@@ -68,6 +70,13 @@ export default function MatchEngine() {
       }, 100);
     }
   }, [matchResult]);
+
+  // --- DIRTY INPUT CHECK ---
+  // Returns true if the current selections differ from what was last analyzed
+  const isInputDirty = analyzedParams && (
+    analyzedParams.resumeId !== selectedResume?._id ||
+    analyzedParams.jobId !== selectedJob?._id
+  );
 
   // Fetch history on mount
   useEffect(() => {
@@ -120,6 +129,12 @@ export default function MatchEngine() {
       );
 
       setMatchResult(res.data.match);
+      // Lock current params as "analyzed"
+      setAnalyzedParams({
+        resumeId: selectedResume._id,
+        jobId: selectedJob._id
+      });
+
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.message || "Failed to compute match.");
@@ -265,15 +280,15 @@ export default function MatchEngine() {
               )}
             </div>
 
-            {/* Submit Button (Completed State Added) */}
+            {/* Submit Button (Updated for Re-Compare Logic) */}
             <button
               type="submit"
-              disabled={loading || matchResult}
+              disabled={loading || (matchResult && !isInputDirty)}
               className={`
                 w-full py-4 rounded-xl font-bold text-lg shadow-[0_4px_20px_rgba(120,50,255,0.2)] transition-all duration-300 flex items-center justify-center gap-2
                 ${loading 
                   ? "bg-gray-400 cursor-not-allowed opacity-70" 
-                  : matchResult
+                  : (matchResult && !isInputDirty)
                     ? "bg-gray-100 text-gray-400 border-2 border-gray-200 cursor-not-allowed shadow-none"
                     : "bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-white hover:scale-[1.01] hover:shadow-[0_6px_30px_rgba(120,50,255,0.3)]"
                 }
@@ -283,9 +298,13 @@ export default function MatchEngine() {
                 <>
                   <Loader2 className="animate-spin w-6 h-6" /> Comparing...
                 </>
-              ) : matchResult ? (
+              ) : (matchResult && !isInputDirty) ? (
                 <>
                   <Check className="w-6 h-6" /> Analysis Complete
+                </>
+              ) : matchResult ? (
+                <>
+                  <RefreshCw className="w-5 h-5" /> Re-Compare Match
                 </>
               ) : (
                 <>
@@ -437,24 +456,24 @@ export default function MatchEngine() {
                </h3>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
-                     <p className="font-bold text-gray-700 mb-3 border-b border-gray-100 pb-2">Likely Objections</p>
-                     <ul className="space-y-3">
-                        {safeArr(matchResult.recruiterObjections).map((obj, i) => (
-                           <li key={i} className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl border-l-4 border-rose-400">
-                              {obj}
-                           </li>
-                        ))}
-                     </ul>
+                      <p className="font-bold text-gray-700 mb-3 border-b border-gray-100 pb-2">Likely Objections</p>
+                      <ul className="space-y-3">
+                         {safeArr(matchResult.recruiterObjections).map((obj, i) => (
+                            <li key={i} className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl border-l-4 border-rose-400">
+                               {obj}
+                            </li>
+                         ))}
+                      </ul>
                   </div>
                   <div>
-                     <p className="font-bold text-gray-700 mb-3 border-b border-gray-100 pb-2">Why They Might Hire You</p>
-                     <ul className="space-y-3">
-                        {safeArr(matchResult.recruiterStrengths).map((str, i) => (
-                           <li key={i} className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl border-l-4 border-emerald-400">
-                              {str}
-                           </li>
-                        ))}
-                     </ul>
+                      <p className="font-bold text-gray-700 mb-3 border-b border-gray-100 pb-2">Why They Might Hire You</p>
+                      <ul className="space-y-3">
+                         {safeArr(matchResult.recruiterStrengths).map((str, i) => (
+                            <li key={i} className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl border-l-4 border-emerald-400">
+                               {str}
+                            </li>
+                         ))}
+                      </ul>
                   </div>
                </div>
             </div>
@@ -464,43 +483,43 @@ export default function MatchEngine() {
                {/* Skills */}
                <div className="md:col-span-2 bg-white/80 backdrop-blur-md p-8 rounded-[2rem] shadow-sm border border-white/60">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                     <div>
-                        <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
-                           <Target className="w-4 h-4 text-emerald-500" /> Matching Skills
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                           {safeArr(matchResult.matchingSkills).map((s, i) => (
-                              <span key={i} className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-100">
-                                 {s}
-                              </span>
-                           ))}
-                        </div>
-                     </div>
-                     <div>
-                        <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
-                           <XCircle className="w-4 h-4 text-rose-500" /> Missing Skills
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                           {safeArr(matchResult.missingSkills).map((s, i) => (
-                              <span key={i} className="px-3 py-1 bg-rose-50 text-rose-700 rounded-lg text-xs font-bold border border-rose-100">
-                                 {s}
-                              </span>
-                           ))}
-                        </div>
-                     </div>
+                      <div>
+                         <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
+                            <Target className="w-4 h-4 text-emerald-500" /> Matching Skills
+                         </h4>
+                         <div className="flex flex-wrap gap-2">
+                            {safeArr(matchResult.matchingSkills).map((s, i) => (
+                               <span key={i} className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-100">
+                                   {s}
+                               </span>
+                            ))}
+                         </div>
+                      </div>
+                      <div>
+                         <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
+                            <XCircle className="w-4 h-4 text-rose-500" /> Missing Skills
+                         </h4>
+                         <div className="flex flex-wrap gap-2">
+                            {safeArr(matchResult.missingSkills).map((s, i) => (
+                               <span key={i} className="px-3 py-1 bg-rose-50 text-rose-700 rounded-lg text-xs font-bold border border-rose-100">
+                                   {s}
+                               </span>
+                            ))}
+                         </div>
+                      </div>
                   </div>
                </div>
 
                {/* Score Boost */}
                <div className="bg-indigo-600 p-8 rounded-[2rem] shadow-lg shadow-indigo-500/30 text-white flex flex-col justify-center relative overflow-hidden">
                   <div className="relative z-10">
-                     <div className="flex items-center gap-2 mb-2 opacity-90">
-                        <TrendingUp className="w-5 h-5" />
-                        <span className="font-bold uppercase text-xs tracking-wider">Score Boost</span>
-                     </div>
-                     <p className="text-sm leading-relaxed opacity-95 font-medium">
-                        {matchResult.scoreBoostEstimate}
-                     </p>
+                      <div className="flex items-center gap-2 mb-2 opacity-90">
+                         <TrendingUp className="w-5 h-5" />
+                         <span className="font-bold uppercase text-xs tracking-wider">Score Boost</span>
+                      </div>
+                      <p className="text-sm leading-relaxed opacity-95 font-medium">
+                         {matchResult.scoreBoostEstimate}
+                      </p>
                   </div>
                   {/* Decorative circles */}
                   <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl"></div>

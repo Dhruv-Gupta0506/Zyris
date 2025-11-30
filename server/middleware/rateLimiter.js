@@ -17,7 +17,7 @@ const apiLimiter = rateLimit({
 // Allows 20 AI generations per hour. Prevents abuse of your Google API quota.
 const aiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 Hour window
-  max: 20, // Limit each IP to 20 AI generations per hour
+  max: 60, // Limit each IP to 20 AI generations per hour
   message: { 
     success: false, 
     message: "You have reached the hourly limit for AI usage. Please wait a while before trying again." 

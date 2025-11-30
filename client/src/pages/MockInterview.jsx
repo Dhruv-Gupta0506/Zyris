@@ -1,4 +1,3 @@
-// frontend/components/MockInterview.jsx
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -15,7 +14,9 @@ import {
   Hash,
   CheckCircle2,
   AlertCircle,
-  Check // Added Check icon
+  Check,
+  RefreshCw,
+  Code // Added Code icon for visual flair
 } from "lucide-react";
 
 // Define API_URL directly to avoid import errors
@@ -31,16 +32,25 @@ export default function MockInterview() {
   const [parsedEvaluation, setParsedEvaluation] = useState(null);
   const [score, setScore] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  // Track parameters used for the current set of questions
+  const [generatedParams, setGeneratedParams] = useState(null);
 
   // --- SCROLL CONTROL ---
-  const [scrollTarget, setScrollTarget] = useState(null); // 'questions' | 'results' | null
+  const [scrollTarget, setScrollTarget] = useState(null); 
 
   const navigate = useNavigate();
-  const questionsRef = useRef(null); // Ref for Questions Section
-  const resultRef = useRef(null);    // Ref for Results Section
+  const questionsRef = useRef(null); 
+  const resultRef = useRef(null);    
+
+  // Check if inputs have changed from what was generated
+  const isInputDirty = generatedParams && (
+    generatedParams.role !== role || 
+    generatedParams.difficulty !== difficulty || 
+    generatedParams.questionCount !== questionCount
+  );
 
   // --- UNIFIED SCROLL EFFECT ---
-  // This ensures scrolling ONLY happens when we explicitly request it via setScrollTarget
   useEffect(() => {
     if (!scrollTarget) return;
 
@@ -50,14 +60,18 @@ export default function MockInterview() {
       } else if (scrollTarget === 'results' && resultRef.current) {
         resultRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-      setScrollTarget(null); // Reset trigger
-    }, 100); // Small delay to ensure DOM render
+      setScrollTarget(null); 
+    }, 100); 
 
     return () => clearTimeout(timer);
-  }, [scrollTarget, questions, parsedEvaluation]); // Depend on data to ensure DOM is ready
+  }, [scrollTarget, questions, parsedEvaluation]); 
 
-  // Remove numbering "1. " etc.
-  const clean = (q) => q.replace(/^\s*\d+[\).\:-]?\s*/g, "").trim();
+  // Clean numbers and quotes from question text
+  const clean = (q) => {
+     let text = q.replace(/^\s*\d+[\).\:-]?\s*/g, "");
+     text = text.replace(/^["'](.*)["']$/, '$1');
+     return text.trim();
+  };
 
   // ------------------------------------------
   // GENERATE QUESTIONS
@@ -70,6 +84,7 @@ export default function MockInterview() {
 
     try {
       setLoading(true);
+      // Reset previous session state
       setQuestions([]);
       setAnswers({});
       setParsedEvaluation(null);
@@ -89,8 +104,8 @@ export default function MockInterview() {
         .slice(0, questionCount);
 
       setQuestions(cleaned);
+      setGeneratedParams({ role, difficulty, questionCount }); // Lock current params
       
-      // TRIGGER SCROLL TO QUESTIONS
       setScrollTarget('questions');
 
     } catch (err) {
@@ -112,7 +127,6 @@ export default function MockInterview() {
 
     try {
       setLoading(true);
-      // Clear previous results to force UI refresh perception
       setScore(null); 
       setParsedEvaluation(null);
 
@@ -134,7 +148,6 @@ export default function MockInterview() {
       const parsed = parseEvaluation(res.data.evaluation);
       setParsedEvaluation(parsed);
 
-      // TRIGGER SCROLL TO RESULTS
       setScrollTarget('results');
 
     } catch (err) {
@@ -149,20 +162,21 @@ export default function MockInterview() {
   // PARSE EVALUATION (Clean Logic)
   // ------------------------------------------
   const normalize = (content) => {
-    return content.replace(/```(\w+)?\s*([\s\S]*?)```/g, (_, lang, code) => {
-      const language = lang || "Code";
-      return `\n${language}:\n${code.trim()}\n`;
-    });
+    // Also remove asterisks ** here for cleanliness
+    return content
+      .replace(/\*\*/g, "") 
+      .replace(/```(\w+)?\s*([\s\S]*?)```/g, (_, lang, code) => {
+        const language = lang || "Code";
+        return `\n${language}:\n${code.trim()}\n`;
+      });
   };
 
   const parseEvaluation = (text) => {
-    // 1. Aggressively remove "FINAL BLOCK" artifacts using a regex that catches newlines and various separator lengths
-    // This regex looks for lines with === that contain "FINAL BLOCK" and removes them + content after if meant to be hidden,
-    // OR just removes the separator line itself if the content is needed.
-    // Assuming the user wants to keep the summary but remove the "=== FINAL BLOCK ===" delimiter line:
-    let cleanText = text.replace(/={3,}\s*FINAL BLOCK\s*={3,}/gi, "");
+    // Clean up unwanted artifacts
+    let cleanText = text
+      .replace(/={3,}\s*FINAL BLOCK\s*={3,}/gi, "")
+      .replace(/\*\*/g, ""); // Aggressively remove asterisks globally
     
-    // Clean up any double newlines created
     cleanText = cleanText.trim();
 
     const parts = cleanText.split(/Q\d+/).slice(1);
@@ -187,7 +201,6 @@ export default function MockInterview() {
     return { sections, summary };
   };
 
-  // Toggle function purely updates state, DOES NOT trigger scroll effect
   const toggle = (i) => {
     setParsedEvaluation((prev) => ({
       ...prev,
@@ -197,15 +210,44 @@ export default function MockInterview() {
     }));
   };
 
+  // --- Helper to Render Question Text with Code Support ---
+  // If the text looks like it contains code (indentation or common keywords), 
+  // we try to display it cleanly.
+  const QuestionContent = ({ text }) => {
+    // Detect if text likely contains a code block or technical description
+    // This splits by the 'javascript' keyword or triple backticks if they survived
+    const parts = text.split(/(```[\s\S]*?```)/g);
+
+    return (
+      <div className="space-y-4">
+        {parts.map((part, idx) => {
+          // If it looks like a code block (wrapped in backticks)
+          if (part.startsWith("```")) {
+            const code = part.replace(/```(\w+)?/g, "").replace(/```/g, "").trim();
+            return (
+              <div key={idx} className="bg-gray-900 rounded-xl p-4 overflow-x-auto border border-gray-800 shadow-sm my-3">
+                <pre className="text-gray-100 font-mono text-sm leading-relaxed whitespace-pre">{code}</pre>
+              </div>
+            );
+          }
+          // Normal text (preserve newlines!)
+          return (
+            <div key={idx} className="whitespace-pre-wrap leading-relaxed text-gray-800 text-lg">
+                {part}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // ------------------------------------------
   // RENDER
   // ------------------------------------------
   return (
     <div className="relative w-full min-h-screen text-[#111827] overflow-hidden pt-36 pb-20 px-4 sm:px-6">
       
-      {/* ========================================================= */}
-      {/* 1. BACKGROUND THEME */}
-      {/* ========================================================= */}
+      {/* Background */}
       <div className="fixed inset-0 -z-30 bg-gradient-to-br from-[#f7f8ff] via-[#eef0ff] to-[#e7e9ff]" />
       <div className="fixed top-[-200px] left-1/2 -translate-x-1/2 w-[900px] h-[900px] bg-[radial-gradient(circle,rgba(150,115,255,0.15),transparent_70%)] blur-[120px] -z-20 pointer-events-none"></div>
       <div className="fixed bottom-0 left-0 w-full h-28 bg-gradient-to-b from-transparent to-[#f7f8ff] pointer-events-none z-10"></div>
@@ -279,16 +321,16 @@ export default function MockInterview() {
               </div>
             </div>
 
-            {/* Generate Button - Updated for Complete State */}
+            {/* GENERATE BUTTON */}
             <button
               onClick={generateQuestions}
-              disabled={loading || questions.length > 0}
+              disabled={loading || (questions.length > 0 && !isInputDirty)}
               className={`
                 w-full py-4 rounded-xl font-bold text-lg shadow-[0_4px_20px_rgba(120,50,255,0.2)] 
                 transition-all duration-300 flex items-center justify-center gap-2
                 ${loading 
                   ? "bg-gray-400 cursor-not-allowed opacity-70" 
-                  : questions.length > 0
+                  : (questions.length > 0 && !isInputDirty)
                     ? "bg-gray-100 text-gray-400 border-2 border-gray-200 cursor-not-allowed shadow-none" 
                     : "bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-white hover:scale-[1.01] hover:shadow-[0_6px_30px_rgba(120,50,255,0.3)]"
                 }
@@ -296,11 +338,15 @@ export default function MockInterview() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="animate-spin w-6 h-6" /> Generating...
+                  <Loader2 className="animate-spin w-6 h-6" /> {questions.length > 0 ? "Regenerating..." : "Generating..."}
+                </>
+              ) : (questions.length > 0 && !isInputDirty) ? (
+                <>
+                  <Check className="w-6 h-6" /> Interview Generated
                 </>
               ) : questions.length > 0 ? (
                 <>
-                  <Check className="w-6 h-6" /> Interview Generated
+                  <RefreshCw className="w-5 h-5" /> Regenerate Interview
                 </>
               ) : (
                 <>
@@ -319,17 +365,19 @@ export default function MockInterview() {
             {questions.map((q, i) => (
               <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 hover:shadow-md transition-all">
                 <div className="flex items-start gap-4 mb-4">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0 font-bold text-sm">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0 font-bold text-sm mt-1">
                     {i + 1}
                   </div>
-                  <p className="text-lg font-semibold text-gray-900 leading-relaxed pt-1">
-                    {q}
-                  </p>
+                  
+                  {/* UPDATED: Uses QuestionContent component to handle newlines/code */}
+                  <div className="flex-1">
+                    <QuestionContent text={q} />
+                  </div>
                 </div>
 
                 <textarea
                   rows={5}
-                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-gray-700 placeholder-gray-400 font-sans"
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-gray-700 placeholder-gray-400 font-sans mt-2"
                   placeholder="Type your answer here..."
                   value={answers[i] || ""}
                   onChange={(e) => setAnswers({ ...answers, [i]: e.target.value })}
@@ -338,7 +386,6 @@ export default function MockInterview() {
             ))}
 
             <div className="max-w-3xl mx-auto">
-              {/* Submit Button - Updated for Complete State */}
               <button
                 onClick={evaluateInterview}
                 disabled={loading || parsedEvaluation}

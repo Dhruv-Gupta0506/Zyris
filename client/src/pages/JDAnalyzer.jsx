@@ -1,4 +1,3 @@
-// frontend/components/JDAnalyzer.jsx
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -14,7 +13,8 @@ import {
   ListChecks,
   Lightbulb,
   BarChart3,
-  Check // Added Check icon
+  Check,
+  RefreshCw // Added Refresh icon
 } from "lucide-react";
 
 // Define API_URL directly to avoid import errors
@@ -25,6 +25,9 @@ export default function JDAnalyzer() {
   const [jobDescription, setJobDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
+  
+  // Track parameters used for the current analysis to detect changes
+  const [analyzedParams, setAnalyzedParams] = useState(null);
   
   const navigate = useNavigate();
   const resultsRef = useRef(null);
@@ -37,6 +40,13 @@ export default function JDAnalyzer() {
       }, 100);
     }
   }, [analysis]);
+
+  // --- DIRTY INPUT CHECK ---
+  // Returns true if the current inputs differ from what was last analyzed
+  const isInputDirty = analyzedParams && (
+    analyzedParams.jobTitle !== jobTitle ||
+    analyzedParams.jobDescription !== jobDescription
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -68,6 +78,12 @@ export default function JDAnalyzer() {
       );
 
       setAnalysis(res.data.analysis);
+      // Lock current params as "analyzed"
+      setAnalyzedParams({
+        jobTitle,
+        jobDescription
+      });
+
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.message || "Job analysis failed.");
@@ -143,13 +159,13 @@ export default function JDAnalyzer() {
             {/* Submit Button - UPDATED LOGIC */}
             <button
               type="submit"
-              disabled={loading || analysis}
+              disabled={loading || (analysis && !isInputDirty)}
               className={`
                 w-full py-4 rounded-xl font-bold text-lg shadow-[0_4px_20px_rgba(120,50,255,0.2)] transition-all duration-300 flex items-center justify-center gap-2
                 ${loading 
                   ? "bg-gray-400 cursor-not-allowed opacity-70" 
-                  : analysis
-                    ? "bg-gray-100 text-gray-400 border-2 border-gray-200 cursor-not-allowed shadow-none" // Completed State
+                  : (analysis && !isInputDirty)
+                    ? "bg-gray-100 text-gray-400 border-2 border-gray-200 cursor-not-allowed shadow-none" 
                     : "bg-gradient-to-r from-fuchsia-500 to-indigo-600 text-white hover:scale-[1.01] hover:shadow-[0_6px_30px_rgba(120,50,255,0.3)]"
                 }
               `}
@@ -158,9 +174,13 @@ export default function JDAnalyzer() {
                 <>
                   <Loader2 className="animate-spin w-6 h-6" /> Analyzing...
                 </>
-              ) : analysis ? (
+              ) : (analysis && !isInputDirty) ? (
                 <>
                   <Check className="w-6 h-6" /> Analysis Complete
+                </>
+              ) : analysis ? (
+                <>
+                  <RefreshCw className="w-5 h-5" /> Re-Analyze Job Match
                 </>
               ) : (
                 <>
@@ -183,10 +203,10 @@ export default function JDAnalyzer() {
                    <Target className="w-7 h-7" />
                  </div>
                  <div>
-                    <p className="text-gray-500 font-bold uppercase tracking-wider text-xs mb-1">Target Role</p>
-                    <h3 className="text-2xl font-bold text-gray-900 leading-tight">
-                      {analysis.jobTitle || "Specified Role"}
-                    </h3>
+                   <p className="text-gray-500 font-bold uppercase tracking-wider text-xs mb-1">Target Role</p>
+                   <h3 className="text-2xl font-bold text-gray-900 leading-tight">
+                     {analysis.jobTitle || "Specified Role"}
+                   </h3>
                  </div>
               </div>
 
@@ -226,18 +246,18 @@ export default function JDAnalyzer() {
                       return (
                         <div key={key} className="bg-gray-50/80 rounded-2xl p-5 border border-gray-100">
                            <div className="flex justify-between items-end mb-2">
-                              <p className="text-gray-500 text-sm font-semibold capitalize">
-                                  {key.replace(/([A-Z])/g, ' $1').trim()}
-                              </p>
-                              <p className="text-lg font-bold text-gray-900">
-                                  {numVal}<span className="text-gray-400 text-sm">/{max}</span>
-                              </p>
+                             <p className="text-gray-500 text-sm font-semibold capitalize">
+                                 {key.replace(/([A-Z])/g, ' $1').trim()}
+                             </p>
+                             <p className="text-lg font-bold text-gray-900">
+                                 {numVal}<span className="text-gray-400 text-sm">/{max}</span>
+                             </p>
                            </div>
                            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                              <div 
-                                  className={`h-2 rounded-full ${colorClass} transition-all duration-1000 ease-out`} 
-                                  style={{ width: `${percentage}%` }}
-                              ></div>
+                             <div 
+                                 className={`h-2 rounded-full ${colorClass} transition-all duration-1000 ease-out`} 
+                                 style={{ width: `${percentage}%` }}
+                             ></div>
                            </div>
                         </div>
                       );
@@ -326,22 +346,22 @@ export default function JDAnalyzer() {
                   <div>
                       <h3 className="text-lg font-bold text-gray-900 mb-3">Improvement Tips</h3>
                       <ul className="space-y-3">
-                         {safeArr(analysis.improvementTips).map((tip, i) => (
-                            <li key={i} className="flex gap-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-xl">
-                               <span className="font-bold text-indigo-400">{i+1}.</span> {tip}
-                            </li>
-                         ))}
+                          {safeArr(analysis.improvementTips).map((tip, i) => (
+                             <li key={i} className="flex gap-3 text-sm text-gray-600 bg-gray-50 p-3 rounded-xl">
+                                <span className="font-bold text-indigo-400">{i+1}.</span> {tip}
+                             </li>
+                          ))}
                       </ul>
                   </div>
                   
                   <div>
                       <h3 className="text-lg font-bold text-gray-900 mb-3">Tailored Bullet Suggestions</h3>
                       <ul className="space-y-3">
-                         {safeArr(analysis.tailoredBulletSuggestions).map((bullet, i) => (
-                            <li key={i} className="flex gap-3 text-sm text-gray-600 bg-indigo-50/50 p-3 rounded-xl border border-indigo-50">
-                               <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full mt-2 flex-shrink-0"></span> {bullet}
-                            </li>
-                         ))}
+                          {safeArr(analysis.tailoredBulletSuggestions).map((bullet, i) => (
+                             <li key={i} className="flex gap-3 text-sm text-gray-600 bg-indigo-50/50 p-3 rounded-xl border border-indigo-50">
+                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full mt-2 flex-shrink-0"></span> {bullet}
+                             </li>
+                          ))}
                       </ul>
                   </div>
                </div>

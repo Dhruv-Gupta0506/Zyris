@@ -3,11 +3,11 @@ const mongoose = require("mongoose");
 
 const ScoringBreakdownSchema = new mongoose.Schema(
   {
-    keywordMatch: { type: Number, min: 30, max: 90, default: null },
-    actionVerbs: { type: Number, min: 30, max: 90, default: null },
-    quantifiedResults: { type: Number, min: 30, max: 90, default: null },
-    formattingClarity: { type: Number, min: 30, max: 90, default: null },
-    relevanceAlignment: { type: Number, min: 30, max: 90, default: null },
+    keywordMatch: { type: Number, min: 40, max: 100, default: null },
+    actionVerbs: { type: Number, min: 40, max: 100, default: null },
+    quantifiedResults: { type: Number, min: 40, max: 100, default: null },
+    formattingClarity: { type: Number, min: 40, max: 100, default: null },
+    relevanceAlignment: { type: Number, min: 40, max: 100, default: null },
   },
   { _id: false }
 );
@@ -22,13 +22,13 @@ const ResumeAnalysisSchema = new mongoose.Schema(
     // Core ATS scoring - enforce allowed band for persistence
     atsScore: {
       type: Number,
-      min: 45,
-      max: 80,
+      min: 40,
+      max: 100,
       default: null,
       validate: {
         validator: function (v) {
           // allow null, otherwise must be within 45-80
-          return v === null || (typeof v === "number" && v >= 45 && v <= 80);
+          return v === null || (typeof v === "number" && v >= 40 && v <= 100);
         },
         message: "atsScore must be null or between 45 and 80",
       },
