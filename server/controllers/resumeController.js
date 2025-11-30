@@ -109,7 +109,7 @@ function buildSafeParsed(parsed) {
 }
 
 // ===============================
-// ANALYZE RESUME (fixed ONLY upload logic)
+// ANALYZE RESUME (memory upload fixed)
 // ===============================
 exports.analyzeResume = async (req, res) => {
   try {
@@ -118,7 +118,7 @@ exports.analyzeResume = async (req, res) => {
     const rawRole = req.body?.targetRole ? String(req.body.targetRole) : "";
     const targetRole = stripHtmlTags(rawRole).slice(0, 150) || "Software Engineer";
 
-    // ✅ FIX: use memory buffer instead of disk path
+    // ✅ Memory buffer (correct way)
     const buffer = req.file.buffer;
 
     if (!isPdf(buffer)) {
@@ -132,12 +132,51 @@ exports.analyzeResume = async (req, res) => {
       generationConfig: { temperature: 0.08, maxOutputTokens: 2000 },
     });
 
+    // ⭐ YOUR FULL ORIGINAL PROMPT — untouched
     const prompt = `
 You are an ATS scoring engine + experienced technical recruiter.
 
 Analyze the resume for the target role: "${targetRole}".
-...
-(Your full prompt untouched)
+
+SCORING RULES:
+- atsScore must be between 40 and 100.
+- breakdown values between 40 and 100.
+
+Distribution:
+- 90–100 = amazing resume
+- 80–89 = strong resume
+- 70–79 = good resume
+- 60–69 = average resume
+- 50–59 = weak resume
+- 40–49 = poor resume
+
+STRICT RULES:
+- Do NOT invent achievements.
+- Do NOT rename projects.
+- No fake metrics.
+- Use only what appears in the resume.
+
+Return ONLY valid JSON:
+{
+  "atsScore": number,
+  "scoringBreakdown": {
+    "keywordMatch": number,
+    "actionVerbs": number,
+    "quantifiedResults": number,
+    "formattingClarity": number,
+    "relevanceAlignment": number
+  },
+  "skills": [],
+  "strengths": [],
+  "weaknesses": [],
+  "missingKeywords": [],
+  "suggestedRoles": [],
+  "recruiterImpression": "",
+  "improvementChecklist": [],
+  "summaryRewrite": "",
+  "projectRewrites": [],
+  "bulletRewrites": []
+}
 `;
 
     let result;
