@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 
 export default function Navbar() {
-	const { token, logout } = useAuth();
+	const { token, logout, loading } = useAuth();
+  if (loading) return null;
 	const navigate = useNavigate();
 	const location = useLocation();
 
