@@ -7,8 +7,9 @@ export default function Landing() {
   const navigate = useNavigate();
   const { login, token, loading } = useAuth();
   if (loading) return null;
+  
   if (token){
-     navigate("/dashboard");
+     navigate("/dashboard", { replace: true });
      return null;
   }
   const cursorGlowRef = useRef(null);
