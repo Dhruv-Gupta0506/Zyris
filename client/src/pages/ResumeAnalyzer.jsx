@@ -96,7 +96,7 @@ export default function ResumeAnalyzer() {
       formData.append("resume", file);
       formData.append("targetRole", targetRole);
 
-      const res = await axios.post(`${API_URL}/api/resume/analyze`, formData, {
+      const res = await axios.post(`${API_URL}/resume/analyze`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data",
