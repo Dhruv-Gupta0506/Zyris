@@ -49,10 +49,14 @@ app.use("/api/match", require("./routes/matchRoutes"));
 app.use("/api/tailor", require("./routes/tailoredRoutes"));
 
 // -----------------------------------------------------------------------------
-// HEALTH CHECK ROUTE
+// HEALTH CHECKS
 // -----------------------------------------------------------------------------
 app.get("/", (req, res) => {
-  res.json({ message: "CareerNexus API Running 🚀" });
+  res.json({ message: "Zyris API Running 🚀" });
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
 });
 
 // -----------------------------------------------------------------------------
