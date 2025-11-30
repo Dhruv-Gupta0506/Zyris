@@ -291,14 +291,16 @@ export default function Navbar() {
 					</div>
 
 					{/* 3. MOBILE MENU BUTTON */}
-					<div className="lg:hidden z-50">
-						<button 
-							onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-							className="p-2 text-gray-600 hover:text-indigo-600 transition-colors"
-						>
-							{isMobileMenuOpen ? <X className="w-8 h-8" /> : <Menu className="w-8 h-8" />}
-						</button>
-					</div>
+					{token && (
+            <div className="lg:hidden z-50">
+              <button 
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 text-gray-600 hover:text-indigo-600 transition-colors"
+              >
+                {isMobileMenuOpen ? <X className="w-8 h-8" /> : <Menu className="w-8 h-8" />}
+              </button>
+            </div>
+          )}
 				</div>
 
 				{/* 4. MOBILE DROPDOWN OVERLAY */}
@@ -306,13 +308,7 @@ export default function Navbar() {
 					<div className="lg:hidden absolute top-full left-0 w-full bg-white/95 backdrop-blur-xl border-b border-gray-100 shadow-xl animate-in slide-in-from-top-5 duration-300 h-[calc(100vh-70px)] overflow-y-auto">
 						<div className="px-6 pt-6 pb-20 space-y-6">
 							
-							{/* PUBLIC LINKS (Top priority for unauthenticated users) */}
-							{!token && (
-								<div className="space-y-4">
-									<button onClick={() => smoothScroll("features")} className="block w-full text-left text-xl font-bold text-gray-700 py-2">Features</button>
-									<button onClick={() => smoothScroll("faq")} className="block w-full text-left text-xl font-bold text-gray-700 py-2">FAQ</button>
-								</div>
-							)}
+					
 
 							{token && (
 								<>
