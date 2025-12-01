@@ -272,9 +272,13 @@ export default function Navbar() {
                                 </>
                         )}
 
-                        {/* PROFILE AVATAR */}
+                        {/* PROFILE AVATAR - HOVER & CLICK */}
                         {token && (
-                            <div className="relative pl-2 border-l border-gray-200">
+                            <div 
+                                className="relative pl-2 border-l border-gray-200"
+                                onMouseEnter={() => setActiveDropdown("profile")}
+                                onMouseLeave={() => setActiveDropdown(null)}
+                            >
                                 <img
                                     src={avatarSrc}
                                     alt="avatar"
@@ -289,21 +293,25 @@ export default function Navbar() {
                                     "
                                 />
                                 
+                                {/* Dropdown Container */}
                                 {activeDropdown === "profile" && (
-                                    <div className="absolute right-0 mt-4 w-48 bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                        <button
-                                            onClick={() => { setActiveDropdown(null); setShowProfileModal(true); }}
-                                            className="w-full text-left px-5 py-3.5 hover:bg-gray-50 text-gray-700 font-medium transition-colors flex items-center gap-2"
-                                        >
-                                            <User className="w-4 h-4" /> Profile
-                                        </button>
-                                        <div className="h-[1px] bg-gray-100 mx-2"></div>
-                                        <button
-                                            onClick={() => { setActiveDropdown(null); setShowLogoutModal(true); }}
-                                            className="w-full text-left px-5 py-3.5 hover:bg-red-50 text-red-500 font-medium transition-colors flex items-center gap-2"
-                                        >
-                                            <LogOut className="w-4 h-4" /> Logout
-                                        </button>
+                                    /* ✅ FIX: Added pt-4 here to bridge the gap and kept original inner styling */
+                                    <div className="absolute top-full right-0 pt-4 w-48 animate-in fade-in slide-in-from-top-2">
+                                        <div className="bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-gray-100 overflow-hidden">
+                                            <button
+                                                onClick={() => { setActiveDropdown(null); setShowProfileModal(true); }}
+                                                className="w-full text-left px-5 py-3.5 hover:bg-gray-50 text-gray-700 font-medium transition-colors flex items-center gap-2"
+                                            >
+                                                <User className="w-4 h-4" /> Profile
+                                            </button>
+                                            <div className="h-[1px] bg-gray-100 mx-2"></div>
+                                            <button
+                                                onClick={() => { setActiveDropdown(null); setShowLogoutModal(true); }}
+                                                className="w-full text-left px-5 py-3.5 hover:bg-red-50 text-red-500 font-medium transition-colors flex items-center gap-2"
+                                            >
+                                                <LogOut className="w-4 h-4" /> Logout
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
