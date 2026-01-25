@@ -83,7 +83,7 @@ exports.analyzeMatch = async (req, res) => {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash", // Use 1.5-flash if 2.0 is unavailable
+      model: "gemini-1.5-flash", // Use 1.5-flash if 2.0 is unavailable
       generationConfig: { temperature: 0.15, maxOutputTokens: 2500 },
     });
 
