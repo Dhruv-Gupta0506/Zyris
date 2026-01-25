@@ -33,7 +33,7 @@ exports.generateQuestions = async (req, res) => {
     
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       generationConfig: { 
         temperature: difficulty === "easy" ? 0.7 : difficulty === "medium" ? 0.85 : 1.0 
       }

@@ -101,7 +101,7 @@ exports.generateTailored = async (req, res) => {
     // Gemini config
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash", // Use 1.5-flash if 2.0 unavailable
+      model: "gemini-2.5-flash", // Use 1.5-flash if 2.0 unavailable
       generationConfig: { temperature: 0.1, maxOutputTokens: 4000 },
     });
 
