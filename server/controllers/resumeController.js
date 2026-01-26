@@ -128,8 +128,8 @@ exports.analyzeResume = async (req, res) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      generationConfig: { temperature: 0.08, maxOutputTokens: 2000 },
+      model: "gemini-2.5-flash",
+      generationConfig: { temperature: 0.08 },
     });
 
     // ⭐ YOUR FULL ORIGINAL PROMPT — untouched

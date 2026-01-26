@@ -29,7 +29,7 @@ exports.analyzeJob = async (req, res) => {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash", // or "gemini-1.5-flash" if 2.0 isn't available yet
+      model: "gemini-2.5-flash", // or "gemini-1.5-flash" if 2.0 isn't available yet
       generationConfig: { temperature: 0.2 },
     });
 
