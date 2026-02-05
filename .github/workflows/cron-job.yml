@@ -1,15 +1,25 @@
-name: Keep Zyris Awake
-
+name: Ping Zyris
 on:
   schedule:
-    # Runs every 14 minutes (Render sleeps at 15)
-    - cron: "*/14 * * * *"
-  workflow_dispatch: # Allows you to test it manually
+    - cron: "*/7 * * * *"  # Runs every 7 minutes
+  workflow_dispatch:       # Allows manual triggering
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Ping Render Backend
+      - name: Random delay
+        # Randomize between 0 and 120s to stay well within the 15m Render window
         run: |
-          curl -I -s --retry 3 --retry-delay 5 --connect-timeout 10 https://zyris-491a.onrender.com
+          DELAY=$(( RANDOM % 121 ))
+          echo "Sleeping for $DELAY seconds..."
+          sleep $DELAY
+
+      - name: Ping status route
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://zyris-491a.onrender.com/)
+          echo "Server responded with status: $RESPONSE"
+          if [ "$RESPONSE" -ne 200 ]; then
+            echo "Warning: Server might be down or returned error $RESPONSE"
+          fi
